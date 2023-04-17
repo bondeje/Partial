@@ -4,6 +4,26 @@
 
 #define MAX_TYPE_SIZE 1024
 
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+   //define something for Windows (32-bit and 64-bit, this part is common)
+   #define VA_ARG_REF_TYPE __int64
+   #ifdef _WIN64
+      #define my_va_arg(va_list_p, type) ((MAX_TYPE_SIZE > sizeof(VA_ARG_REF_TYPE) || (MAX_TYPE_SIZE & (MAX_TYPE_SIZE - 1)) != 0) ? \
+                        **(struct PartialBuffer_MAX**)((*va_list_p += sizeof(VA_ARG_REF_TYPE)) - sizeof(VA_ARG_REF_TYPE)) : \
+                        *(struct PartialBuffer_MAX* )((*va_list_p += sizeof(VA_ARG_REF_TYPE)) - sizeof(VA_ARG_REF_TYPE)))
+   #else
+      //define something for Windows (32-bit only)
+   #endif
+#elif __linux__
+    #include <stdint.h>
+    #define VA_ARG_REF_TYPE int64_t
+    #define my_va_arg(va_list_p, type) ((MAX_TYPE_SIZE > sizeof(VA_ARG_REF_TYPE) || (MAX_TYPE_SIZE & (MAX_TYPE_SIZE - 1)) != 0) ? \
+                        **(struct PartialBuffer_MAX**)((va_list_p += sizeof(VA_ARG_REF_TYPE)) - sizeof(VA_ARG_REF_TYPE)) : \
+                        *(struct PartialBuffer_MAX* )((va_list_p += sizeof(VA_ARG_REF_TYPE)) - sizeof(VA_ARG_REF_TYPE)))
+#else
+#   error "unhandled platform"
+#endif
+
 #define RESIZE_REALLOC(result, elem_type, obj, num)                                 \
 { /* encapsulate to ensure temp_obj can be reused */                                \
 elem_type* temp_obj = (elem_type*) realloc(obj, sizeof(elem_type) * (num));      \
@@ -36,7 +56,8 @@ Partial * Partial_new_(void* (*func)(), unsigned int * sizes, unsigned short npa
 
     flags |= HEAP_BUFFER_FLAG;
     Partial_init(pobj, func, buffer, buffer_size, sizes, nparam, flags);
-};
+    return pobj;
+}
 
 void Partial_init(Partial * pobj, void* (*func)(), unsigned char * buffer, size_t buffer_size, unsigned int * sizes, unsigned short nparam, unsigned int flags) {
     //printf("calling Partial_init\n");
@@ -47,6 +68,8 @@ void Partial_init(Partial * pobj, void* (*func)(), unsigned char * buffer, size_
         pobj->narg = 0;
         return;
     }
+    pobj->narg = 0;
+    pobj->argset = 0;
     pobj->func = func;
     pobj->buffer = buffer;
     pobj->buffer_size = buffer_size;
@@ -70,7 +93,6 @@ void Partial_init(Partial * pobj, void* (*func)(), unsigned char * buffer, size_
     }
     //printf("\tremainder of byte_locs filled in\n");
     // include check against buffer size here
-    pobj->argset = 0;
     pobj->flags = flags;
     if (pobj->byte_loc[MAX_PARTIAL_NARG] > pobj->buffer_size) {
         if (!(pobj->flags & HEAP_BUFFER_FLAG)) {
@@ -125,81 +147,11 @@ static enum partial_status Partial_copy_buffer(Partial * pobj, size_t index, siz
             // this works on Windows 10 with MinGW-64 running GCC 8.1.0
             struct PartialBuffer_MAX {
                 unsigned char x[MAX_TYPE_SIZE];
-            } buf = ((MAX_TYPE_SIZE > sizeof(__int64) || (MAX_TYPE_SIZE & (MAX_TYPE_SIZE - 1)) != 0) ? \
-                        **(struct PartialBuffer_MAX**)((*args_p += sizeof(__int64)) - sizeof(__int64)) : \
-                        *(struct PartialBuffer_MAX* )((*args_p += sizeof(__int64)) - sizeof(__int64)));
+            } buf = my_va_arg(args_p, PartialBUffer_MAX);
             memcpy(pobj->buffer + pobj->byte_loc[index], &buf, size);
             break;
         }
     }
-    
-    /*
-    switch (size) {
-        case sizeof(int): {
-            struct int_buf {
-                unsigned char x[sizeof(int)];
-            } buf = va_arg(*args_p, struct int_buf);
-            memcpy(pobj->buffer + pobj->byte_loc[index], &buf, size);
-            break;
-        }
-        
-        case sizeof(long int): {
-            struct ll_buf {
-                unsigned char x[sizeof(int)];
-            } buf = va_arg(*args_p, struct ll_buf);
-            memcpy(pobj->buffer + pobj->byte_loc[index], &buf, size);
-            break;
-        }
-        
-        case sizeof(double): {
-            struct dbl_buf {
-                unsigned char x[sizeof(double)];
-            } buf = va_arg(*args_p, struct dbl_buf);
-            memcpy(pobj->buffer + pobj->byte_loc[index], &buf, size);
-            break;
-        }
-        
-        case sizeof(long long int): {
-            struct ll_buf {
-                unsigned char x[sizeof(int)];
-            } buf = va_arg(*args_p, struct ll_buf);
-            memcpy(pobj->buffer + pobj->byte_loc[index], &buf, size);
-            break;
-        }
-        case sizeof(void*): {
-            struct pvoid_buf {
-                unsigned char x[sizeof(int)];
-            } buf = va_arg(*args_p, struct pvoid_buf);
-            memcpy(pobj->buffer + pobj->byte_loc[index], &buf, size);
-            break;
-        }
-        case sizeof(void(*)()): {
-            struct dbl_buf {
-                unsigned char x[sizeof(int)];
-            } buf = va_arg(*args_p, struct dbl_buf);
-            memcpy(pobj->buffer + pobj->byte_loc[index], &buf, size);
-            break;
-        }
-        case sizeof(void*(*)()): {
-            struct dbl_buf {
-                unsigned char x[sizeof(int)];
-            } buf = va_arg(*args_p, struct dbl_buf);
-            memcpy(pobj->buffer + pobj->byte_loc[index], &buf, size);
-            break;
-        }
-        
-        case 16: { // long double on Windows with GCC
-            struct dbl_buf {
-                unsigned char x[16];
-            } buf = va_arg(*args_p, struct dbl_buf);
-            memcpy(pobj->buffer + pobj->byte_loc[index], &buf, size);
-            break;
-        }
-        default: {
-            return PARTIAL_VALUE_ERROR;
-        }
-    }
-    */
     //printf("Partial_copy_buffer success\n");
     return PARTIAL_SUCCESS;
 }

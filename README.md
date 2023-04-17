@@ -1,7 +1,9 @@
 # Partial
-An implementation of partials (see e.g. Python functools.partial) for the C language.
+An implementation of partials (see e.g. Python functools.partial) for the C language. Please see the known limitations before assuming this works.
 
 This is very much in progress. It is tested for simple objects with arguments of types with sizes 1, 2, 4, 8, 12, and 16 on Windows with MinGW running GCC 8.1.
+
+Due to some differences in how `va_list`s are structured between linux and windows, this appears to only work for Windows.
 
 ## Use
 
@@ -26,24 +28,7 @@ Partial_fill(Partial * p, value, value, ..., PARTIAL_SENTINEL);
 output_type result = Partial_call(output_type, Partial * p, arg_type_0, arg_type_1, ..., arg_type_N);
 ```
 
-For any given `Partial` object, once a value is bound, it currently cannot be unbound. `Partial_bind` may be called multiple times on the same object and overwrite bound values.
-
-`Partial_fill` may be called multiple times on the same `Partial` object. Each subsequent call will override values. It will never override already bound values.
-
-## (Known) Limitations
-
-Most of the limitations below are due to the underlying mechanisms relying on variadics, for which the default promotions really screw up buffering. If the C preprocessor would have the ability to distinguish at least the basic types or even between int vs float vs anything else, all these limitations could be in principle taken into account.
-
-- Only up to 16 arguments are handled. If you absolutely need more, may whatever god you pray to have mercy on your soul.
-- `float` types will not work. The default promotions prevent use of this common type as it is utterly indistinguishable by the preprocessor from other types that are not promoted. Suggested work-around is to create a wrapper function that takes double and casts down to float.
-- All non-integer types `A` where `sizeof(A) < sizeof(int)`. For the same reason as `float`, but here, a design choice was made to either be compatible with integer types of size smaller than `int/unsigned int` or small non-integer types. Note that `bool` and `char` being promoted to integer types work fine. In the future, I might make a flag to invert this behavior since there is probably a workaround that I have not thought of for ints.
-
-## not yet tested
-
-- The full gamut of possible function pointers.
-- C++ types, especially template types
-
-## Example
+### Example
 ```
 double add_int_double(int a, double b) {
     return a + b;
@@ -74,3 +59,22 @@ int main() {
 //stdout
 //result of calculation: -0.7655
 ```
+
+For any given `Partial` object, once a value is bound, it currently cannot be unbound. `Partial_bind` may be called multiple times on the same object and overwrite bound values.
+
+`Partial_fill` may be called multiple times on the same `Partial` object. Each subsequent call will override values. It will never override already bound values.
+
+## (Known) Limitations
+
+Most of the limitations below are due to the underlying mechanisms relying on variadics, for which the default promotions really screw up buffering. If the C preprocessor would have the ability to distinguish at least the basic types or even between int vs float vs anything else, all these limitations could be in principle taken into account.
+
+- This appears to only work in Windows as the `va_list` implementation for linux platforms is more complicated/obfuscated.
+- Only up to 16 arguments are handled. If you absolutely need more, may whatever god you pray to have mercy on your soul.
+- `float` types will not work. The default promotions prevent use of this common type as it is utterly indistinguishable by the preprocessor from other types that are not promoted. Suggested work-around is to create a wrapper function that takes double and casts down to float.
+- All non-integer types `A` where `sizeof(A) < sizeof(int)`. For the same reason as `float`, but here, a design choice was made to either be compatible with integer types of size smaller than `int/unsigned int` or small non-integer types. Note that `bool` and `char` being promoted to integer types work fine. In the future, I might make a flag to invert this behavior since there is probably a workaround that I have not thought of for ints.
+- untested for structures of sizes different from the standard type. Currently limited to objects with `sizeof(type) <= 1024`.
+
+## not yet tested
+
+- The full gamut of possible function pointers.
+- C++ types, especially template types
