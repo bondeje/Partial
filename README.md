@@ -54,7 +54,7 @@ int main() {
     Partial p;
     // in general this must account for promotions.
     size_t buffer_size = sizeof(int) + sizeof(double);
-    char buffer[sizeof(int) + sizeof(double)]; 
+    unsigned char buffer[sizeof(int) + sizeof(double)]; 
 
     // initialize partial using function "add_int_double" that uses buffer of size buffer_size (there is buffer overflow checking) to potentially store int and double arguments for execution
     partial(&p, add_int_double, buffer, buffer_size, int, double);

@@ -8,6 +8,7 @@
 #define MAX_PARTIAL_NARG 16
 #endif // MAX_PARTIAL_NARG
 
+#define HEAP_BUFFER_FLAG 1
 #define MIN_VA_ARG_SIZE sizeof(int)
 
 #define CONCAT2(A,B) A##B
@@ -81,6 +82,10 @@
                  15,14,13,12,11,10, 9, 8,\
                   7, 6, 5, 4, 3, 2, 1, 0, UNUSED)
 
+#define Partial_new(func, ...) \
+(unsigned int UNIQUE_VAR_NAME(sizes)[NARG(__VA_ARGS__)] = {SIZE_LIST(__VA_ARGS__)}, \
+Partial_init(pobjp, (void* (*)())func, NULL, 0, UNIQUE_VAR_NAME(sizes), NARG(__VA_ARGS__), HEAP_BUFFER_FLAG))
+
 #define Partial(pobjp, func, buffer, buffer_size, ...) \
 unsigned int UNIQUE_VAR_NAME(sizes)[NARG(__VA_ARGS__)] = {SIZE_LIST(__VA_ARGS__)};\
 Partial_init(pobjp, (void* (*)())func, buffer, buffer_size, UNIQUE_VAR_NAME(sizes), NARG(__VA_ARGS__), 0);
@@ -138,6 +143,8 @@ enum partial_types {
     PARTIAL_PVOIDPVOID,     // "pp" void * (*)()
 };
 */
+
+Partial * Partial_new_(void* (*func)(), unsigned int * sizes, unsigned short nparam, unsigned int flags);
 
 void Partial_init(Partial * pobj, void* (*func)(), unsigned char * buffer, size_t buffer_size, unsigned int * sizes, unsigned short nparam, unsigned int flags);
 

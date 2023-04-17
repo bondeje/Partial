@@ -1,8 +1,42 @@
+#include <stdlib.h>
+#include <stdbool.h>
 #include "partial.h"
 
-#define MAX_TYPE_SIZE 16
+#define MAX_TYPE_SIZE 1024
 
-#define MALLOCED_BUFFER 1
+#define RESIZE_REALLOC(result, elem_type, obj, num)                                 \
+{ /* encapsulate to ensure temp_obj can be reused */                                \
+elem_type* temp_obj = (elem_type*) realloc(obj, sizeof(elem_type) * (num));      \
+if (temp_obj) {                                                                     \
+    obj = temp_obj;                                                                 \
+    result = true;                                                                  \
+} else {                                                                            \
+    result = false;                                                                 \
+}                                                                                   \
+}
+
+Partial * Partial_new_(void* (*func)(), unsigned int * sizes, unsigned short nparam, unsigned int flags) {
+    if (!func || !sizes) {
+        return NULL;
+    }
+    Partial * pobj = (Partial *) malloc(sizeof(Partial));
+    if (!pobj) {
+        return NULL;
+    }
+    size_t buffer_size = 0;
+    for (unsigned short i = 0; i < nparam; i++) {
+        buffer_size += (sizes[i] < MIN_VA_ARG_SIZE ? MIN_VA_ARG_SIZE : sizes[i]);
+    }
+
+    unsigned char * buffer = (unsigned char *) malloc(buffer_size);
+    if (!buffer) {
+        free(pobj);
+        return NULL;
+    }
+
+    flags |= HEAP_BUFFER_FLAG;
+    Partial_init(pobj, func, buffer, buffer_size, sizes, nparam, flags);
+};
 
 void Partial_init(Partial * pobj, void* (*func)(), unsigned char * buffer, size_t buffer_size, unsigned int * sizes, unsigned short nparam, unsigned int flags) {
     printf("calling Partial_init\n");
@@ -38,17 +72,23 @@ void Partial_init(Partial * pobj, void* (*func)(), unsigned char * buffer, size_
     // include check against buffer size here
     pobj->argset = 0;
     pobj->flags = flags;
-    if (!(pobj->flags & MALLOCED_BUFFER) && pobj->byte_loc[MAX_PARTIAL_NARG] > pobj->buffer_size) {
-        printf("insufficient buffer size, setting error flag on Partial: have %zu, need %u\n", pobj->buffer_size, pobj->byte_loc[MAX_PARTIAL_NARG]);
-        pobj->narg = 0;
-    } else {
-        pobj->narg = nparam;
+    if (pobj->byte_loc[MAX_PARTIAL_NARG] > pobj->buffer_size) {
+        if (!(pobj->flags & HEAP_BUFFER_FLAG)) {
+            //printf("insufficient buffer size, setting error flag on Partial: have %zu, need %u\n", pobj->buffer_size, pobj->byte_loc[MAX_PARTIAL_NARG]);
+            pobj->narg = 0;
+            return;
+        } else {
+            bool result = true;
+            RESIZE_REALLOC(result, unsigned char, pobj->buffer, pobj->byte_loc[MAX_PARTIAL_NARG]);
+            if (result) {
+                pobj->buffer_size = pobj->byte_loc[MAX_PARTIAL_NARG];
+            } else {
+                pobj->narg = 0;
+                return;
+            }
+        }
     }
-    if (pobj->narg) {
-        printf("Partial_init success\n");
-    } else {
-        printf("Partial_init_failure\n");
-    }
+    pobj->narg = nparam;
 }
 
 // need to have platform specific handling for when there are different cases
@@ -81,6 +121,8 @@ static enum partial_status Partial_copy_buffer(Partial * pobj, size_t index, siz
         }
         default: { // the non-portable or special struct types
             // this might have to get a macro distinguishing systems for porting
+
+            // this works on Windows 10 with MinGW-64 running GCC 8.1.0
             struct PartialBuffer_MAX {
                 unsigned char x[MAX_TYPE_SIZE];
             } buf = ((MAX_TYPE_SIZE > sizeof(__int64) || (MAX_TYPE_SIZE & (MAX_TYPE_SIZE - 1)) != 0) ? \
@@ -207,4 +249,10 @@ enum partial_status Partial_fill(Partial * pobj, ...) {
         printf("\n");
     }
     return PARTIAL_SUCCESS;
+}
+
+void Partial_del(Partial * pobj) {
+    free(pobj->buffer);
+    pobj->buffer = NULL;
+    free(pobj);
 }
