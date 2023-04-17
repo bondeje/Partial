@@ -1,7 +1,7 @@
 #include <stddef.h> // size_t
 #include <stdlib.h> // maybe not necessary
 #include <stdarg.h> // va_list, etc.
-#include <stdio.h>
+//#include <stdio.h>
 #include <string.h> // memcpy
 
 #ifndef MAX_PARTIAL_NARG

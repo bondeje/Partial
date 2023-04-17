@@ -39,11 +39,11 @@ Partial * Partial_new_(void* (*func)(), unsigned int * sizes, unsigned short npa
 };
 
 void Partial_init(Partial * pobj, void* (*func)(), unsigned char * buffer, size_t buffer_size, unsigned int * sizes, unsigned short nparam, unsigned int flags) {
-    printf("calling Partial_init\n");
+    //printf("calling Partial_init\n");
     if (!pobj) {
         return;
     } else if (nparam > MAX_PARTIAL_NARG) {
-        printf("too many arguments passes to initialization, max %d\n", MAX_PARTIAL_NARG);
+        //printf("too many arguments passes to initialization, max %d\n", MAX_PARTIAL_NARG);
         pobj->narg = 0;
         return;
     }
@@ -62,13 +62,13 @@ void Partial_init(Partial * pobj, void* (*func)(), unsigned char * buffer, size_
             return;
         }
         pobj->byte_loc[i+1] = pobj->byte_loc[i] + size;
-        printf("size of index %hu: %u\n", i, pobj->byte_loc[i+1] - pobj->byte_loc[i]);
+        //printf("size of index %hu: %u\n", i, pobj->byte_loc[i+1] - pobj->byte_loc[i]);
     }
-    printf("\tsizes consumed\n");
+    //printf("\tsizes consumed\n");
     for (unsigned int i = nparam + 1; i <= (int)MAX_PARTIAL_NARG; i++) {
         pobj->byte_loc[i] = pobj->byte_loc[i-1];
     }
-    printf("\tremainder of byte_locs filled in\n");
+    //printf("\tremainder of byte_locs filled in\n");
     // include check against buffer size here
     pobj->argset = 0;
     pobj->flags = flags;
@@ -93,7 +93,7 @@ void Partial_init(Partial * pobj, void* (*func)(), unsigned char * buffer, size_
 
 // need to have platform specific handling for when there are different cases
 static enum partial_status Partial_copy_buffer(Partial * pobj, size_t index, size_t size, va_list *args_p) {
-    printf("calling Partial_copy_buffer\n");
+    //printf("calling Partial_copy_buffer\n");
     if (!pobj) {
         return PARTIAL_VALUE_ERROR;
     }
@@ -200,28 +200,28 @@ static enum partial_status Partial_copy_buffer(Partial * pobj, size_t index, siz
         }
     }
     */
-    printf("Partial_copy_buffer success\n");
+    //printf("Partial_copy_buffer success\n");
     return PARTIAL_SUCCESS;
 }
 
 enum partial_status Partial_bind(Partial * pobj, ...) {
-    printf("Calling Partial_bind\n");
+    //printf("Calling Partial_bind\n");
     va_list args;
     va_start(args, pobj);
     unsigned int index = va_arg(args, unsigned int);
     while (index != PARTIAL_SENTINEL && index < pobj->narg) {
-        printf("\tbinding at index %u\n", index);
+        //printf("\tbinding at index %u\n", index);
         Partial_copy_buffer(pobj, index, pobj->byte_loc[index+1] - pobj->byte_loc[index], &args);
         pobj->argset |= (1 << index); // mark the argument as set
         index = va_arg(args, unsigned int);
     }
     va_end(args);
-    printf("Partial_bind success\n");
+    //printf("Partial_bind success\n");
     return PARTIAL_SUCCESS;
 }
 
 enum partial_status Partial_fill(Partial * pobj, ...) {
-    printf("Calling Partial_fill\n");
+    //printf("Calling Partial_fill\n");
     if (!pobj) {
         return PARTIAL_VALUE_ERROR;
     }
@@ -230,7 +230,7 @@ enum partial_status Partial_fill(Partial * pobj, ...) {
     unsigned short arg_ct = 0;
     size_t flag = 1;
 
-    printf("\n");
+    //printf("\n");
     while (arg_ct < pobj->narg) {
         if (!(flag & pobj->argset)) {
             Partial_copy_buffer(pobj, arg_ct, pobj->byte_loc[arg_ct+1] - pobj->byte_loc[arg_ct], &args);
@@ -239,15 +239,7 @@ enum partial_status Partial_fill(Partial * pobj, ...) {
         flag <<= 1;
     }
     va_end(args);
-    printf("Partial_fill success\n");
-
-    printf("values in buffer (%u):\n", pobj->narg);
-    for (unsigned int i = 0; i < pobj->narg; i++) {
-        for (int j = 0; j < pobj->byte_loc[i+1] - pobj->byte_loc[i]; j++) {
-            printf("%x ", pobj->buffer[pobj->byte_loc[i]+j]);
-        }
-        printf("\n");
-    }
+    //printf("Partial_fill success\n");
     return PARTIAL_SUCCESS;
 }
 
