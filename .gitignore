@@ -50,3 +50,10 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# VS code directories
+.vscode/
+
+# previous code
+.previous_attempts/
+.workbench/
