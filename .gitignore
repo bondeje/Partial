@@ -55,5 +55,5 @@ dkms.conf
 .vscode/
 
 # previous code
-.previous_attempts/
-.workbench/
+previous_attempts/
+workbench/
