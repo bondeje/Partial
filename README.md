@@ -44,7 +44,7 @@ int main() {
     unsigned char buffer[sizeof(int) + sizeof(double)]; 
 
     // initialize partial using function "add_int_double" that uses buffer of size buffer_size (there is buffer overflow checking) to potentially store int and double arguments for execution
-    Partial_init(&p, FUNC_CAST(add_int_double), "%lf=%d%lf", buffer, buffer_size, int, double);
+    Partial_init(&p, FUNC_CAST(add_int_double), "%lf=%d%lf", buffer, buffer_size, 0);
 
     // bind values to arguments as positions starting from 0. In this case 2.345e-1 is bound to parameter 1 (b)
     Partial_bind(&p, 1, 2.345e-1, PARTIAL_SENTINEL);
