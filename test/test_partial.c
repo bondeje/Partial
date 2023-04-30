@@ -50,8 +50,10 @@ void test_init(void) {
     long long d = -23807098475445393;
     float e = -1.3e4;
     double f = 2.34e56;
+    Partial_bind(&p, 2, c, PARTIAL_SENTINEL);
     printf("sending values:\n\t%c\n\t%d\n\t%ld\n\t%lld\n\t%f\n\t%lf\n", a, b, c, d, e, f);
-    printf("result of Partial_call: %d\n", Partial_call(NULL, &p, a, b, c, d, e, f));
+    printf("result of Partial_call: %d\n", Partial_call(NULL, &p, a, b, d, e, f));
+    
 }
 
 int main() {

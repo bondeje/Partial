@@ -64,6 +64,7 @@ typedef struct Partial {
     unsigned int flags; // for tracking memory allocations
     unsigned int narg;
     ffi_abi ABI;
+    partial_status status;
 } Partial;
 
 partial_status Partial_init(Partial * pobj, FUNC_PROTOTYPE(func), char * format, unsigned char * buffer, size_t buffer_size, unsigned int flags);

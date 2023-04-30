@@ -252,9 +252,9 @@ static partial_status Partial_set_type(Partial * pobj, unsigned int index, size_
         if (*fmtp == '\0' && typep == end) {
             pobj->args[index].type = &partial_types[i];
             pobj->args[index].buf_loc = *buf_locp;
-            *buf_locp += pobj->args[index].type->size;
             if (index) {
-                pobj->narg++;
+                *buf_locp += pobj->args[index].type->size;  // don't save return type to buffer
+                pobj->narg++;                               // don't save 
             }
 #ifdef DEVELOPMENT
     printf("type found: %s\n", pobj->args[index].type->name);
@@ -301,6 +301,7 @@ static partial_status Partial_set_default(Partial * pobj, unsigned int index, ch
 }
 
 // for now the return portion is required
+// TODO: now that partial_status is held in the object, this should return the buffer size required and the buffer allocation check should move to the Partial_init function
 static partial_status Partial_parse_format(Partial * pobj, char * format) {
     char *cp = format;
     unsigned int index = 0;
@@ -314,15 +315,19 @@ static partial_status Partial_parse_format(Partial * pobj, char * format) {
                 char * start = cp;
                 partial_status found_type = Partial_set_type(pobj, index, &buf_loc, start, Format_get_type_code_end(&cp));
                 if (found_type != PARTIAL_SUCCESS) {
-                    return found_type;
+                    pobj->status = found_type;
+                    return pobj->status;
                 }
                 index++;
+#ifdef DEVELOPMENT
                 printf("%zu\n", buf_loc);
+#endif
                 break;
             }
             case FORMAT_SENTINEL: {
                 if (!pobj->narg) {
-                    return PARTIAL_BAD_FORMAT;
+                    pobj->status = PARTIAL_BAD_FORMAT;
+                    return pobj->status;
                 }
                 done = true;
                 break;
@@ -337,7 +342,8 @@ static partial_status Partial_parse_format(Partial * pobj, char * format) {
                 char * start = cp;
                 partial_status found_keyword = Partial_set_alias(pobj, index - 1, start, Format_get_keyword_end(&cp));
                 if (found_keyword != PARTIAL_SUCCESS) {
-                    return found_keyword;
+                    pobj->status = found_keyword;
+                    return pobj->status;
                 }
                 break;
             }
@@ -348,7 +354,8 @@ static partial_status Partial_parse_format(Partial * pobj, char * format) {
                     char * start = cp;
                     partial_status found_default = Partial_set_default(pobj, index - 1, start, Format_get_default_end(&cp));
                     if (found_default != PARTIAL_SUCCESS) {
-                        return found_default;
+                        pobj->status = found_default;
+                        return pobj->status;
                     }
                 }
                 break;
@@ -357,9 +364,12 @@ static partial_status Partial_parse_format(Partial * pobj, char * format) {
                 cp++;
                 break;
             }
-            default: {
+            default: { // only other acceptable part of format is whitespace
+                if (!Format_is_whitespace(*cp)) {
+                    pobj->status = PARTIAL_BAD_FORMAT;
+                    return pobj->status;
+                }
                 Format_skip_whitespace(&cp);
-
                 break;
             }
         }
@@ -371,7 +381,8 @@ static partial_status Partial_parse_format(Partial * pobj, char * format) {
             if (pobj->buffer_size < buf_loc) {
                 unsigned char * new_buffer = (unsigned char *) realloc(pobj->buffer, buf_loc);
                 if (!new_buffer) {
-                    return PARTIAL_MALLOC_FAILURE;
+                    pobj->status = PARTIAL_MALLOC_FAILURE;
+                    return pobj->status;
                 }
                 for (size_t i = pobj->buffer_size; i < buf_loc; i++) {
                     new_buffer[i] = '\0';
@@ -383,7 +394,8 @@ static partial_status Partial_parse_format(Partial * pobj, char * format) {
             pobj->buffer = (unsigned char *) malloc(buf_loc);
             if (!pobj->buffer) {
                 pobj->flags &= ~ALLOCED_BUFFER_FLAG; // do not free a buffer that has not been malloced
-                return PARTIAL_MALLOC_FAILURE;
+                pobj->status = PARTIAL_MALLOC_FAILURE;
+                return pobj->status;
             }
             for (size_t i = 0; i < buf_loc; i++) {
                 pobj->buffer[i] = '\0';
@@ -392,24 +404,31 @@ static partial_status Partial_parse_format(Partial * pobj, char * format) {
         }
     } else {
         if (pobj->buffer_size < buf_loc) {
-            return PARTIAL_INSUFFICIENT_BUFFER_SIZE;
+            pobj->status = PARTIAL_INSUFFICIENT_BUFFER_SIZE;
+            return pobj->status;
         }
     }
 
-    return PARTIAL_SUCCESS;
+    return pobj->status;
 }
 
 
 // TODO: check that pobj-narg only counts input arguments
 partial_status Partial_init(Partial * pobj, FUNC_PROTOTYPE(func), char * format, unsigned char * buffer, size_t buffer_size, unsigned int flags) {
+    if (!pobj) {
+        return PARTIAL_VALUE_ERROR;
+    }
+    pobj->status = PARTIAL_SUCCESS;
     if (!partial_initialized) {
         Partial_global_init();
         if (!partial_initialized) {
-            return PARTIAL_INIT_FAILED;
+            pobj->status = PARTIAL_INIT_FAILED;
+            return pobj->status;
         }
     }
-    if (!pobj || !format || !func || !(buffer || (flags & ALLOCED_BUFFER_FLAG))) {
-        return PARTIAL_VALUE_ERROR;
+    if (!format || !func || !(buffer || (flags & ALLOCED_BUFFER_FLAG))) {
+        pobj->status = PARTIAL_VALUE_ERROR;
+        return pobj->status;
     }
 
     pobj->narg = 0;
@@ -589,6 +608,11 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
 }
 
 partial_status Partial_bind(Partial * pobj, ...) {
+    if (!pobj) {
+        return PARTIAL_VALUE_ERROR;
+    } else if (!(pobj->status == PARTIAL_SUCCESS)) {
+        return pobj->status;
+    }
     va_list args;
     va_start(args, pobj);
     int index = va_arg(args, int);
@@ -598,9 +622,9 @@ partial_status Partial_bind(Partial * pobj, ...) {
     }
     va_end(args);
     if (index != PARTIAL_SENTINEL) {
-        return PARTIAL_COPY_FAILURE;
+        pobj->status = PARTIAL_COPY_FAILURE;
     }
-    return PARTIAL_SUCCESS;
+    return pobj->status;
 }
 
 partial_status Partial_bind_args(Partial * pobj, ...) { // bind null-terminated list of arguments in order
@@ -615,34 +639,51 @@ partial_status Partial_call(void * ret, Partial * pobj, ...) {
     va_list args;
     va_start(args, pobj);
     unsigned short i = 0;
-    ffi_type *argtypes[PARTIAL_MAX_NARG+1];
-    argtypes[0] = pobj->args[0].type->ftp;
-    void * argvalues[PARTIAL_MAX_NARG];
-    //printf("nargin: %u\n", pobj->narg);
+    ffi_type * ret_type = pobj->args[0].type->ftp;
+    ffi_type * arg_types[PARTIAL_MAX_NARG];
+    void * arg_values[PARTIAL_MAX_NARG];
+#ifdef DEVELOPMENT
+    printf("nargin: %u\n", pobj->narg);
+#endif
     while (i < pobj->narg) {
         if (!(pobj->argset & (1 << i))) {
             if (Partial_copy_value(pobj, i, &args)) {
-                return PARTIAL_COPY_FAILURE;
+                pobj->status = PARTIAL_COPY_FAILURE;
+                return pobj->status;
             }
         }
-        argvalues[i] = (void*)(pobj->buffer + pobj->args[i+PARTIAL_ARG_START_INDEX].buf_loc);
+        arg_values[i] = (void*)(pobj->buffer + pobj->args[i+PARTIAL_ARG_START_INDEX].buf_loc);
+        arg_types[i] = pobj->args[i+PARTIAL_ARG_START_INDEX].type->ftp; // since i++ occurs before...DO NOT include PARTIAL_ARG_START_INDEX
         i++;
-        argtypes[i] = pobj->args[i].type->ftp; // since i++ occurs before...DO NOT include PARTIAL_ARG_START_INDEX
     }
 
-    //printf("finished copying values...\n");
+#ifdef DEVELOPMENT
+    printf("finished copying values...\n");
+#endif
 
     ffi_cif cif;
-    ffi_status cfi_stat = ffi_prep_cif(&cif, pobj->ABI, pobj->narg, argtypes[0], &argtypes[1]);
+    ffi_status cfi_stat = ffi_prep_cif(&cif, pobj->ABI, pobj->narg, ret_type, arg_types);
+#ifdef DEVELOPMENT
+    printf("prepped cif\n");
+#endif
     if (cfi_stat != FFI_OK) {
-        //printf("ffi_prep_cif not ok: %d\n", cfi_stat);
-        return cfi_stat;
+#ifdef DEVELOPMENT
+        printf("ffi_prep_cif not ok: %d\n", cfi_stat);
+#endif
+        pobj->status = cfi_stat;
+        return pobj->status;
     }
-
-    ffi_call(&cif, pobj->func, ret, &argvalues[0]);
-    return cfi_stat;
-    
-    //return PARTIAL_SUCCESS;
+#ifdef DEVELOPMENT
+    //printf("return %lf: calling with values: %d, %lf, %lf\n", *(double*)ret, *(int*)arg_values[0], *(double*)arg_values[1], *(double*)arg_values[2]);
+#endif
+    //double result = 0.0;
+    //ffi_call(&cif, pobj->func, &result, arg_values);
+    //memcpy(ret, &result, sizeof(double));
+    ffi_call(&cif, pobj->func, ret, arg_values);
+    //ffi_arg rc;
+    //ffi_call(&cif, pobj->func, &rc, arg_values);
+    //printf("%d\n")
+    return pobj->status;
 }
 
 void Partial_del(Partial * pobj) {

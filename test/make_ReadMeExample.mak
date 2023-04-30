@@ -6,7 +6,7 @@ EXT =
 LFLAGS = -L./ 
 CFLAGS = -std=c99 -O2 -Wall -pedantic
 IFLAGS = -I../include
-CCFLAGS = -D DEVELOPMENT # -D DEVELOPMENT turns on internal print statements for diagnostics
+CCFLAGS = #-D DEVELOPMENT # -D DEVELOPMENT turns on internal print statements for diagnostics
 
 ifeq ($(OS),Windows_NT)
 	# might have to encapsulate with a check for MINGW. Need this because Windows f-s up printf with size_t and MINGW only handles it with their own implementation of stdio
@@ -53,9 +53,9 @@ else
     #endif
 endif
 
-CFLAGS += -o test_partial$(EXT)
+CFLAGS += -o ReadMe$(EXT)
 
 all: build
 
 build:
-	$(CC) $(CFLAGS) $(IFLAGS) $(CCFLAGS) test_partial.c ../src/partial.c $(LFLAGS)
+	$(CC) $(CFLAGS) $(IFLAGS) $(CCFLAGS) ReadMeExample.c ../src/partial.c $(LFLAGS)
