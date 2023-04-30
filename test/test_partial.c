@@ -43,7 +43,7 @@ void test_init(void) {
     Partial p;
     char format[256] = "%v=%c{ my_char = c }%d{my_int=-3}%ld{my_long=-380710293}%lld{my_longlong=-23807098475445393}%f{my_float=-1.3e4}%lf{my_double=2.34e56}"; 
     unsigned char buffer[256];
-    printf("result of Partial_init: %d\n", Partial_init(&p, FUNC_CAST(my_func), format, buffer, 256, 0));
+    printf("result of Partial_init: %d\n", Partial_init(&p, -1, FUNC_CAST(my_func), format, buffer, 256, 0));
     char a = 'c';
     int b = -3;
     long c = -380710293;
@@ -52,7 +52,7 @@ void test_init(void) {
     double f = 2.34e56;
     Partial_bind(&p, 2, c, PARTIAL_SENTINEL);
     printf("sending values:\n\t%c\n\t%d\n\t%ld\n\t%lld\n\t%f\n\t%lf\n", a, b, c, d, e, f);
-    printf("result of Partial_call: %d\n", Partial_call(NULL, &p, a, b, d, e, f));
+    printf("result of Partial_call: %d\n", Partial_call(&p, NULL, a, b, d, e, f));
     
 }
 

@@ -18,6 +18,8 @@
 #define PARTIAL_MAX_NARG 16
 #endif
 
+#define PARTIAL_DEFAULT_ABI FFI_DEFAULT_ABI
+
 #define DYNAMIC_BUFFER_FLAG 1
 
 #define PARTIAL_SENTINEL -1
@@ -25,9 +27,11 @@
 #define FUNC_PROTOTYPE(name) void (*name) (void)
 #define FUNC_CAST(func) (FUNC_PROTOTYPE(EMPTY)) func
 
+typedef ffi_abi partial_abi;
 typedef struct PartialType PartialType;
 
 typedef enum partial_status {
+    PARTIAL_KEY_ERROR = -15,
     PARTIAL_NOT_YET_IMPLEMENTED = -14,
     PARTIAL_TYPE_ERROR = -13,
     PARTIAL_BAD_FORMAT = -12,
@@ -35,7 +39,6 @@ typedef enum partial_status {
     PARTIAL_COPY_FAILURE = -10,
     PARTIAL_INSUFFICIENT_ARGS = -9,
     PARTIAL_INSUFFICIENT_BUFFER_SIZE = -8,
-    PARTIAL_TOO_MANY_ARGS = -7,
     PARTIAL_UNSUPPORTED_TYPE = -6,
     PARTIAL_INCOMPLETE_SPEC = -5,
     PARTIAL_VALUE_ERROR = -4,
@@ -63,13 +66,16 @@ typedef struct Partial {
     unsigned char * buffer;
     unsigned int flags; // for tracking memory allocations
     unsigned int narg;
-    ffi_abi ABI;
+    partial_abi ABI;
     partial_status status;
 } Partial;
 
-partial_status Partial_init(Partial * pobj, FUNC_PROTOTYPE(func), char * format, unsigned char * buffer, size_t buffer_size, unsigned int flags);
+Partial * Partial_new(partial_abi ABI, FUNC_PROTOTYPE(func), char * format, unsigned int nargin, unsigned int nkwargin, ...);
+partial_status Partial_init(Partial * pobj, partial_abi ABI, FUNC_PROTOTYPE(func), char * format, unsigned char * buffer, size_t buffer_size, unsigned int flags);
+partial_status Partial_bind_n(Partial * pobj, unsigned int nargin, ...);
 partial_status Partial_bind(Partial * pobj, ...);
-partial_status Partial_bind_args(Partial * pobj, ...); // bind null-terminated list of arguments in order
-partial_status Partial_bind_kwargs(Partial * pobj, ...); // bind null-terminated list of keyword arguments
-partial_status Partial_call(void * ret, Partial * pobj, ...);
+partial_status Partial_bind_nargs(Partial * pobj, unsigned int nargin, ...); // bind null-terminated list of arguments in order
+partial_status Partial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, ...); // bind null-terminated list of keyword arguments
+partial_status Partial_call(Partial * pobj, void * ret, ...);
+partial_status Partial_calln(Partial * pobj, void * ret, unsigned int nargin, ...);
 void Partial_del(Partial * pobj);
