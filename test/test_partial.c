@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 #include <limits.h>
 #include <stdint.h>
@@ -33,7 +34,30 @@ float test_object_types(char c, unsigned char cu, char * s, void * p, short hd, 
     return flt;
 }
 
+void my_func(char a, int b, long c, long long d, float e, double f) {
+    printf("my_func receives values:\n\t%c\n\t%d\n\t%ld\n\t%lld\n\t%f\n\t%lf\n", a, b, c, d, e, f);
+    return;
+}
+
+void test_init(void) {
+    Partial p;
+    char format[256] = "%v=%c{ my_char = c }%d{my_int=-3}%ld{my_long=-380710293}%lld{my_longlong=-23807098475445393}%f{my_float=-1.3e4}%lf{my_double=2.34e56}"; 
+    unsigned char buffer[256];
+    printf("result of Partial_init: %d\n", Partial_init(&p, FUNC_CAST(my_func), format, buffer, 256, 0));
+    char a = 'c';
+    int b = -3;
+    long c = -380710293;
+    long long d = -23807098475445393;
+    float e = -1.3e4;
+    double f = 2.34e56;
+    printf("sending values:\n\t%c\n\t%d\n\t%ld\n\t%lld\n\t%f\n\t%lf\n", a, b, c, d, e, f);
+    printf("result of Partial_call: %d\n", Partial_call(NULL, &p, a, b, c, d, e, f));
+}
+
 int main() {
+    test_init();
+
+    /*
     my_pvoid = (void*)my_string;
     size_t buffer_size = SUM_OBJECT_SIZES;
     unsigned char object_type_buffer[SUM_OBJECT_SIZES] = {'\0'};
@@ -47,5 +71,6 @@ int main() {
     printf("float output: %f\n", fresult);
 
     printf("sizeof(double) = %zu, sizeof(long double) = %zu\n", sizeof(double), sizeof(long double));
+    */
     return 0;
 }

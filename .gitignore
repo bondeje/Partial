@@ -51,9 +51,17 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
+# tar and zip source files
+*.tar
+*.gz
+
 # VS code directories
 .vscode/
 
 # previous code
 previous_attempts/
 workbench/
+libffi-3.4.4/
+
+# external dependencies
+ext/
