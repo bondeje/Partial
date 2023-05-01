@@ -1,12 +1,26 @@
+/*
+TODO: need to figure out a way to pass c-str defaults into char * values. 
+    Probably have to make a special case, but then need an extra buffer, or add
+     to the existing buffer in pobj to store the default string. In the latter 
+    case, default cstr argument will not work in a static implementation. The 
+    only other alternative is to have a global buffer for string defaults, but
+    that sounds like an aweful idea.
+
+TODO: implement the aliasing and the corresponding keyword lookup
+*/
+
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <limits.h>
 #ifdef DEVELOPMENT
     #include <stdio.h>
 #endif
+
+// libffi using an unnamed union, which is not allowed by ISO C99, but it should not be a problem since I'm linked against libffi compiled to a newer standard
 // turn-on ignoring GCC diagnostics for -Wpedantic in C99 linking to ffi.h
 #if defined(__GNUC__) && (__GNUC__ > 4 || \
                          (__GNUC__ == 4 && (__GNUC_MINOR__ > 6 || \
@@ -36,6 +50,8 @@
 #define FORMAT_DEFAULT_START FORMAT_RETURN_SENTINEL
 #define FORMAT_DEFAULT_SENTINEL FORMAT_KEYWORD_SENTINEL
 #define WHITESPACE " \t\n\v\f\r"
+
+#define PARTIAL_FORMAT_BUFFER_SIZE 5
 
 #define PARTIAL_ARG_START_INDEX 1
 
@@ -241,7 +257,8 @@ static inline char * Format_get_default_end(char ** cpp) {
 // TODO: make a generic string compare like this where one is a c-str and another is an incomplete c-str/c++ iterator style char array
 static partial_status Partial_set_type(Partial * pobj, unsigned int index, size_t * buf_locp, char * start, char * end) {
     if (!start || !end) {
-        return PARTIAL_BAD_FORMAT;
+        pobj->status = PARTIAL_BAD_FORMAT;
+        return pobj->status;
     }
     for (unsigned int i = 0; i < PARTIAL_N_TYPES; i++) {
         char * typep = start, * fmtp = partial_types[i].fmt_code;
@@ -259,16 +276,18 @@ static partial_status Partial_set_type(Partial * pobj, unsigned int index, size_
 #ifdef DEVELOPMENT
     printf("type found: %s\n", pobj->args[index].type->name);
 #endif
-            return PARTIAL_SUCCESS;
+            return pobj->status;
         }
     }
-    return PARTIAL_UNSUPPORTED_TYPE;
+    pobj->status = PARTIAL_UNSUPPORTED_TYPE;
+    return pobj->status;
 }
 
 // TODO:
 static partial_status Partial_set_alias(Partial * pobj, unsigned int index, char * start, char * end) {
     if (!start || !end) {
-        return PARTIAL_BAD_FORMAT;
+        pobj->status = PARTIAL_BAD_FORMAT;
+        return pobj->status;
     }
 #ifdef DEVELOPMENT
     printf("alias found: ");
@@ -279,14 +298,19 @@ static partial_status Partial_set_alias(Partial * pobj, unsigned int index, char
     printf("\n");
     return PARTIAL_SUCCESS;
 #endif
-    return PARTIAL_BAD_FORMAT;
+    return pobj->status;
 }
 
 // TODO:
 // if buffer is already present or allocated, handle buffer size errors or resizing if necessary
 static partial_status Partial_set_default(Partial * pobj, unsigned int index, char * start, char * end) {
     if (!start || !end) {
-        return PARTIAL_BAD_FORMAT;
+        pobj->status = PARTIAL_BAD_FORMAT;
+        return pobj->status;
+    }
+    if (end-start >= PARTIAL_MAX_DEFAULT_SIZE) {
+        pobj->status = PARTIAL_DEFAULT_STRING_TOO_LARGE;
+        return pobj->status;
     }
 #ifdef DEVELOPMENT
     printf("default found: ");
@@ -297,7 +321,50 @@ static partial_status Partial_set_default(Partial * pobj, unsigned int index, ch
     printf("\n");
     return PARTIAL_SUCCESS;
 #endif
-    return PARTIAL_TYPE_ERROR;
+
+    // copy default into temporary buffer c-string
+    char buffer[PARTIAL_MAX_DEFAULT_SIZE];
+    unsigned int i = 0; // because of check above, i cannot be >= PARTIAL_MAX_DEFAULT_SIZE
+    while (start != end) {
+        buffer[i] = *start;
+        i++;
+        start++;
+    }
+    buffer[i] = '\0';
+
+    // need to handle special case of c-str and void *
+    if (pobj->args[index].type->id == PARTIAL_PVOID) {
+        if (strcmp(buffer, "NULL")) { 
+            return (pobj->status = PARTIAL_TYPE_ERROR);
+        }
+        void * v = NULL;
+        memcpy(pobj->buffer + pobj->args[index].buf_loc, &v, sizeof(void*));
+        return pobj->status;
+    }
+    
+    // set format code for sscanf
+    char format[PARTIAL_FORMAT_BUFFER_SIZE];
+    i = 0;
+    format[i] = '%';
+    i++;
+    if (pobj->args[index].type->id == PARTIAL_UCHAR) { // special case of unsigned char until i a better use case is defined.
+        format[i] = 'c';
+        i++;
+    } else {
+        char * f = pobj->args[index].type->fmt_code;
+        while (*f != '\0') {
+            format[i] = *f;
+            f++;
+            i++;
+            if (i >= PARTIAL_FORMAT_BUFFER_SIZE) {
+                return (pobj->status = PARTIAL_INSUFFICIENT_BUFFER_SIZE);
+            }
+        }
+    }
+    format[i] = '\0';
+
+    sscanf(buffer, format, (void*)(pobj->buffer + pobj->args[index].buf_loc)); // not sure this is going to work
+    return pobj->status;
 }
 
 // for now the return portion is required
@@ -741,6 +808,7 @@ Partial * Partial_new(partial_abi abi, FUNC_PROTOTYPE(func), char * format, unsi
     return pobj;
 }
 
+// TODO: need a way to identify that all values have been assigned SOMETHING
 partial_status vPartial_call(Partial * pobj, void * ret, unsigned int nargin, va_list args) {
     unsigned int i = 0, j = 0;
     ffi_type * ret_type = pobj->args[0].type->ftp;

@@ -1,3 +1,6 @@
+#include <stddef.h>
+
+// libffi using an unnamed union, which is not allowed by ISO C99, but it should not be a problem since I'm linked against libffi compiled to a newer standard
 // turn-on ignoring GCC diagnostics for -Wpedantic in C99 linking to ffi.h
 #if defined(__GNUC__) && (__GNUC__ > 4 || \
                          (__GNUC__ == 4 && (__GNUC_MINOR__ > 6 || \
@@ -18,6 +21,10 @@
 #define PARTIAL_MAX_NARG 16
 #endif
 
+#ifndef PARTIAL_MAX_DEFAULT_SIZE
+#define PARTIAL_MAX_DEFAULT_SIZE 256
+#endif
+
 #define PARTIAL_DEFAULT_ABI FFI_DEFAULT_ABI
 
 #define DYNAMIC_BUFFER_FLAG 1
@@ -31,6 +38,7 @@ typedef ffi_abi partial_abi;
 typedef struct PartialType PartialType;
 
 typedef enum partial_status {
+    PARTIAL_DEFAULT_STRING_TOO_LARGE = -16,
     PARTIAL_KEY_ERROR = -15,
     PARTIAL_NOT_YET_IMPLEMENTED = -14,
     PARTIAL_TYPE_ERROR = -13,
@@ -73,9 +81,9 @@ typedef struct Partial {
 Partial * Partial_new(partial_abi ABI, FUNC_PROTOTYPE(func), char * format, unsigned int nargin, unsigned int nkwargin, ...);
 partial_status Partial_init(Partial * pobj, partial_abi ABI, FUNC_PROTOTYPE(func), char * format, unsigned char * buffer, size_t buffer_size, unsigned int flags);
 partial_status Partial_bind_n(Partial * pobj, unsigned int nargin, ...);
-partial_status Partial_bind(Partial * pobj, ...);
-partial_status Partial_bind_nargs(Partial * pobj, unsigned int nargin, ...); // bind null-terminated list of arguments in order
-partial_status Partial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, ...); // bind null-terminated list of keyword arguments
-partial_status Partial_call(Partial * pobj, void * ret, ...);
+partial_status Partial_bind(Partial * pobj, ...); // must end in PARTIAL_SENTINEL
+partial_status Partial_bind_nargs(Partial * pobj, unsigned int nargin, ...);  // fills in arguments from left to right
+partial_status Partial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, ...); // fills in keyword arguments
+partial_status Partial_call(Partial * pobj, void * ret, ...); // be very careful. must provide all the arguments not covered by previous calls to _bind or _bind_n
 partial_status Partial_calln(Partial * pobj, void * ret, unsigned int nargin, ...);
 void Partial_del(Partial * pobj);
