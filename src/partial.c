@@ -854,7 +854,7 @@ partial_status Partial_call(Partial * pobj, void * ret, ...) {
     return pobj->status;
 }
 
-partial_status Partial_calln(Partial * pobj, void * ret, unsigned int nargin, ...) {
+partial_status Partial_call_n(Partial * pobj, void * ret, unsigned int nargin, ...) {
     va_list args;
     va_start(args, nargin);
     pobj->status = vPartial_call(pobj, ret, nargin, args);

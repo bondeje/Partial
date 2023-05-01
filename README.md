@@ -7,26 +7,6 @@ This does not use any of libffi's closure mechanisms because of the typical case
 
 Warning, that this will require some knowledge/distinction about the ABIs in use for the functions being wrapped in the partial, but for now, this uses the defaults for the target systems.
 
-## Dependencies
-
-Depends on [libffi](https://sourceware.org/libffi/). You will need to install and configure the libffi library on your machine for the appropriate build and host machine. Then link as appropriate using the `ffi.h` and `ffitarget.h` headers.
-
-### notes on configuring libffi
-
-For Linux, the configuration is pretty straightforward. Run
-
-`./configure`
-
-in the unzipped libffi distribution directory to get the shared library.
-
-For Windows, however, there is typically some finessing. For MSVC or clang, try to follow the instructions for [libffi on github](https://github.com/libffi/libffi). I did not get this to work for MSVC, but I'm more accustomed to GCC. For GCC, I highly suggest using an MSYS2 environment with GCC from MinGW64. 
-
-The default configuration for libffi (at least in 3.4.4 that I tried) is wrong for GCC on MinGW64. For some reason, it defaults to x86_64-pc-msys/mingw64. The pc configuration will screw up the build and test of libffi. I had to specifically configure build and host machines:
-
-`./configure --build=x86_64-w64-mingw64 --host=x86_64-w64-mingw64`
-
-After I figured that out, no problems.
-
 ## Use
 
 Declare a `Partial` structure and a buffer:
@@ -45,6 +25,10 @@ Partial_init(Partial * p, partial_abi ABI, function pointer, char * format, unsi
 // bind pairs of values to function call. index specifies which argument is set and value is the corresponding value. PARTIAL_SENTINEL to end sequence
 Partial_bind(Partial * p, index_0, value_0, index_1, value_1, ..., PARTIAL_SENTINEL);
 
+/*
+For any given `Partial` object, once a value is bound, it currently cannot be unbound. `Partial_bind` may be called multiple times on the same object and overwrite bound values.
+*/
+
 // call the function. For output_type = `void` omit the LHS.
 // fill in non-bound values from left to right to use in call.
 Partial_call(Partial * p, void * return_value, val_0, val_1, ...);
@@ -60,7 +44,7 @@ List of accepted types and their format specifiers
 | void                  | %v        | should only use for return value |
 | bool                  | %b        | |
 | char                  | %c        | |
-| unsigned char         | %cu       | WARNING: this might change to be consistent with sscanf/printf |
+| unsigned char         | %cu       | WARNING: this might change to be consistent with <br/> sscanf/printf |
 | short                 | %hd       | |
 | unsigned short        | %hu       | |
 | int                   | %d        | |
@@ -69,13 +53,16 @@ List of accepted types and their format specifiers
 | unsigned long         | %lu       | |
 | long long             | %lld      | |
 | unsigned long long    | %llu      | |
-| size_t                | %zu       | may only work on Windows for MinGW64 |
+| size_t                | %zu       | may only work on Windows for MinGW64. <br/> See make files for appropriate flags in this case |
 | float                 | %f        | |
 | double                | %lf       | |
-| long double           | %LF       | On systems without long double, defaults to double (libffi) |
-| void *                | %p        | Any object pointer |
+| long double           | %LF       | On systems without long double, defaults to double (due to libffi) |
+| void *                | %p        | Any object pointer. In future, a %s specifier may be <br/> added for char * cstr to allow cstr default values |
 
 ### Example
+
+This is a risky example that requires a sentinel in `Partial_bind` and a variadic not controller by the caller in `Partial_call`. `Partial_bind_n` and `Partial_call_n` are safer, and just add a parameter for the number of variadic arguments (`Partial_call*`)/pairs (`Partial_bind*`) before the ellipsis. A better example is forthcoming.
+
 ```
 #include <stdio.h>
 #include "partial.h"
@@ -108,9 +95,28 @@ int main() {
 //result of calculation: -0.7655
 ```
 
-For any given `Partial` object, once a value is bound, it currently cannot be unbound. `Partial_bind` may be called multiple times on the same object and overwrite bound values.
+## Dependencies
 
-## not yet tested
+Depends on [libffi](https://sourceware.org/libffi/). You will need to install and configure the libffi library on your machine for the appropriate build and host machine. Then link as appropriate using the `ffi.h` and `ffitarget.h` headers.
 
+### notes on configuring libffi
+
+For Linux, the configuration is pretty straightforward. Run
+
+`./configure`
+
+in the unzipped libffi distribution directory to get the shared library.
+
+For Windows, however, there is typically some finessing. For MSVC or clang, try to follow the instructions for [libffi on github](https://github.com/libffi/libffi). I did not get this to work for MSVC, but I'm more accustomed to GCC. For GCC, I highly suggest using an MSYS2 environment with GCC from MinGW64.
+
+The default configuration for libffi (at least in 3.4.4 that I tried) is wrong for GCC on MinGW64 with x86_64 architecture. For some reason, it defaults to x86_64-pc-msys/mingw64, but the pc configuration will screw up the build and test of libffi. I had to specifically configure build and host machines:
+
+`./configure --build=x86_64-w64-mingw64 --host=x86_64-w64-mingw64`
+
+After I figured that out, no problems.
+
+## not yet tested/wish list
+
+- keyword argument binding/calling. Note that I'm probably going to re-define `Partial_call` to get this to work.
 - The full gamut of possible function pointers.
-- C++ types, especially template types
+- C++ types, especially template types, but they probably will not work out of the box.

@@ -84,6 +84,8 @@ partial_status Partial_bind_n(Partial * pobj, unsigned int nargin, ...);
 partial_status Partial_bind(Partial * pobj, ...); // must end in PARTIAL_SENTINEL
 partial_status Partial_bind_nargs(Partial * pobj, unsigned int nargin, ...);  // fills in arguments from left to right
 partial_status Partial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, ...); // fills in keyword arguments
+
+/* WARNING: the Partial_call* functions are likely to be reworked */
 partial_status Partial_call(Partial * pobj, void * ret, ...); // be very careful. must provide all the arguments not covered by previous calls to _bind or _bind_n
-partial_status Partial_calln(Partial * pobj, void * ret, unsigned int nargin, ...);
+partial_status Partial_call_n(Partial * pobj, void * ret, unsigned int nargin, ...);
 void Partial_del(Partial * pobj);
