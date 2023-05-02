@@ -58,4 +58,4 @@ CFLAGS += -o test_partial$(EXT)
 all: build
 
 build:
-	$(CC) $(CFLAGS) $(IFLAGS) $(CCFLAGS) test_partial.c ../src/partial.c $(LFLAGS)
+	$(CC) $(CFLAGS) $(IFLAGS) $(CCFLAGS) test_partial.c ../src/partial.c ../src/keyword_map.c $(LFLAGS)

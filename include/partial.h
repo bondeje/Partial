@@ -21,6 +21,11 @@
 #define PARTIAL_MAX_NARG 16
 #endif
 
+#ifndef PARTIAL_ALIAS_MAP_SIZE
+#define PARTIAL_ALIAS_MAP_SIZE (2*PARTIAL_MAX_NARG+1)
+#endif
+#include "keyword_map.h"
+
 #ifndef PARTIAL_MAX_DEFAULT_SIZE
 #define PARTIAL_MAX_DEFAULT_SIZE 256
 #endif
@@ -65,6 +70,7 @@ typedef struct PartialArg {
 } PartialArg;
 
 typedef struct Partial {
+    AliasMap map; // this is going to be a very large component
     FUNC_PROTOTYPE(func);
     //void* (*func)(); // cannot use this. libffi uses void (*)(void)...for some weird reason. I thought this explicitly excluded arguments
     PartialArg args[PARTIAL_MAX_NARG+1]; // first is for return value

@@ -41,7 +41,8 @@ void my_func(char a, int b, long c, long long d, float e, double f) {
 
 void test_init(void) {
     Partial p;
-    char format[256] = "%v=%c{ my_char = c }%d{my_int=-3}%ld{my_long=-380710293}%lld{my_longlong=-23807098475445393}%f{my_float=-1.3e4}%lf{my_double=2.34e56}"; 
+    //char format[256] = "%v=%c{ my_char = c }%d{my_int=-3}%ld{my_long=-380710293}%lld{my_longlong=-23807098475445393}%f{my_float=-1.3e4}%lf{my_double=2.34e56}"; 
+    char format[256] = "%v=%c%d%ld{=-380710293}%lld{=-23807098475445393}%f{my_float=-1.3e4}%lf{my_double=2.34e56}"; 
     unsigned char buffer[256];
     printf("result of Partial_init: %d\n", Partial_init(&p, -1, FUNC_CAST(my_func), format, buffer, 256, 0));
     char a = 'c';
@@ -53,6 +54,14 @@ void test_init(void) {
     Partial_bind(&p, 2, c, PARTIAL_SENTINEL);
     printf("sending values:\n\t%c\n\t%d\n\t%ld\n\t%lld\n\t%f\n\t%lf\n", a, b, c, d, e, f);
     printf("result of Partial_call: %d\n", Partial_call(&p, NULL, a, b, d, e, f));
+
+    for (unsigned int i = 0; i < p.map.size; i++) {
+        if (p.map.bins[i].key) {
+            printf("map: %s -> %u\n", p.map.bins[i].key, p.map.bins[i].value);
+            printf("check: %s -> %u\n", p.map.bins[i].key, KeywordMap_get(&p.map, p.map.bins[i].key));
+        }
+    }
+    
     
 }
 

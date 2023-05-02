@@ -58,4 +58,4 @@ CFLAGS += -o ReadMe$(EXT)
 all: build
 
 build:
-	$(CC) $(CFLAGS) $(IFLAGS) $(CCFLAGS) ReadMeExample.c ../src/partial.c $(LFLAGS)
+	$(CC) $(CFLAGS) $(IFLAGS) $(CCFLAGS) ReadMeExample.c ../src/partial.c ../src/keyword_map.c $(LFLAGS)

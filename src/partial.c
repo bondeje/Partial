@@ -68,7 +68,7 @@ typedef void* (*pvoidpfunc)();
 
 static bool partial_initialized = false;
 
-#define PARTIAL_N_TYPES 19
+#define PARTIAL_N_TYPES 20
 
 #define PARTIAL_VOID         0
 #define PARTIAL_BOOL         1
@@ -89,6 +89,7 @@ static bool partial_initialized = false;
 #define PARTIAL_PVOID       16
 #define PARTIAL_VOIDPFUNC   17
 #define PARTIAL_PVOIDPFUNC  18
+#define PARTIAL_CSTRING     19
 
 PartialType partial_types[PARTIAL_N_TYPES];
 
@@ -176,6 +177,10 @@ static partial_status Partial_global_init() {
             case PARTIAL_PVOIDPFUNC: {
                 // stand-in...this isn't standard C, but libffi apparently does not have a suitable alternative
                 partial_types[i] = (PartialType) {&ffi_type_pointer, sizeof(pvoidpfunc), "pf", "void * (*)()", PARTIAL_PVOIDPFUNC};
+                break;
+            }
+            case PARTIAL_CSTRING: {
+                partial_types[i] = (PartialType) {&ffi_type_pointer, sizeof(char*), "s", "char *", PARTIAL_CSTRING};
                 break;
             }
             default: {
@@ -283,21 +288,17 @@ static partial_status Partial_set_type(Partial * pobj, unsigned int index, size_
     return pobj->status;
 }
 
-// TODO:
-static partial_status Partial_set_alias(Partial * pobj, unsigned int index, char * start, char * end) {
-    if (!start || !end) {
-        pobj->status = PARTIAL_BAD_FORMAT;
-        return pobj->status;
+// TODO: still need to store the keyword somewhere
+static partial_status Partial_set_alias(Partial * pobj, unsigned int index, char * start) {
+    if (!start) {
+        return (pobj->status = PARTIAL_BAD_FORMAT);
     }
 #ifdef DEVELOPMENT
-    printf("alias found: ");
-    while (start != end) {
-        printf("%c", *start);
-        start++;
-    }
-    printf("\n");
-    return PARTIAL_SUCCESS;
+    printf("alias found: %s\n", start);
 #endif
+    if (KeywordMap_add(&pobj->map, start, index)) {
+        pobj->status = PARTIAL_KEY_ERROR;
+    }
     return pobj->status;
 }
 
@@ -313,13 +314,7 @@ static partial_status Partial_set_default(Partial * pobj, unsigned int index, ch
         return pobj->status;
     }
 #ifdef DEVELOPMENT
-    printf("default found: ");
-    while (start != end) {
-        printf("%c", *start);
-        start++;
-    }
-    printf("\n");
-    return PARTIAL_SUCCESS;
+    printf("default found: %s\n", start);
 #endif
 
     // copy default into temporary buffer c-string
@@ -367,6 +362,59 @@ static partial_status Partial_set_default(Partial * pobj, unsigned int index, ch
     return pobj->status;
 }
 
+// do this only once
+static partial_status Partial_buffer_format(Partial * pobj, unsigned int index, size_t * buf_loc, char * format) {
+#ifdef DEVELOPMENT
+    printf("adding format to buffer\n");
+#endif
+    size_t N = strlen(format) + 1; // number of bytes needed to store the format
+    if (pobj->buffer_size >= N || pobj->flags & ALLOCED_BUFFER_FLAG) {
+#ifdef DEVELOPMENT
+        printf("sufficient space in buffer\n");
+#endif
+        if (pobj->buffer_size < N) {
+            if (pobj->buffer_size) {
+                unsigned char * buffer = NULL;
+                buffer = (unsigned char *) realloc(pobj->buffer, N);
+                if (!buffer) {
+                    return (pobj->status = PARTIAL_REALLOC_FAILURE);
+                }
+                pobj->buffer = buffer;
+            } else {
+                pobj->buffer = (unsigned char *) malloc(N);
+                if (!pobj->buffer) {
+                    return (pobj->status = PARTIAL_MALLOC_FAILURE);
+                }
+            }
+            pobj->buffer_size = N;
+        } 
+        size_t i = 0;
+        while (*format != '\0') {
+            pobj->buffer[i] = (unsigned char)(*format);
+            i++;
+            format++;
+        }
+        pobj->buffer[i] = '\0';
+
+#ifdef DEVELOPMENT
+        printf("shifting buf_locations by %zu to accommodate format in buffer:\n", N);
+#endif
+        i = 0;
+        while (i < index) {
+#ifdef DEVELOPMENT
+            printf("shifting %s location from %zu -> %zu\n", pobj->args[i].type->name, pobj->args[i].buf_loc, pobj->args[i].buf_loc + N);
+#endif
+            pobj->args[i].buf_loc += N;
+            i++;
+        }
+        *buf_loc += N;
+    } else {
+        pobj->status = PARTIAL_INSUFFICIENT_BUFFER_SIZE;
+    }
+    
+    return pobj->status;
+}
+
 // for now the return portion is required
 // TODO: now that partial_status is held in the object, this should return the buffer size required and the buffer allocation check should move to the Partial_init function
 static size_t Partial_parse_format(Partial * pobj, char * format) {
@@ -374,15 +422,16 @@ static size_t Partial_parse_format(Partial * pobj, char * format) {
     unsigned int index = 0;
     size_t buf_loc = 0;
     bool done = false;
+    bool alias_found = false;
+    bool buffered_format = false;
     while (!done && *cp != FORMAT_SENTINEL) {
         switch (*cp) {
             case FORMAT_TYPE_START: {
                 cp++;
                 Format_skip_whitespace(&cp);
                 char * start = cp;
-                partial_status found_type = Partial_set_type(pobj, index, &buf_loc, start, Format_get_type_code_end(&cp));
-                if (found_type != PARTIAL_SUCCESS) {
-                    pobj->status = found_type;
+                pobj->status = Partial_set_type(pobj, index, &buf_loc, start, Format_get_type_code_end(&cp));
+                if (pobj->status != PARTIAL_SUCCESS) {
                     return pobj->status;
                 }
                 index++;
@@ -400,18 +449,38 @@ static size_t Partial_parse_format(Partial * pobj, char * format) {
                 break;
             }
             case FORMAT_KEYWORD_START: {
+#ifdef DEVELOPMENT
+                printf("found keyword alias\n");
+#endif
                 // add keyword alias
                 if (index == 1) { // FORMAT_KEYWORD_START found after return argument. invalid format
                     return PARTIAL_BAD_FORMAT;
                 }
                 cp++;
                 Format_skip_whitespace(&cp);
-                char * start = cp;
-                partial_status found_keyword = Partial_set_alias(pobj, index - 1, start, Format_get_keyword_end(&cp));
-                if (found_keyword != PARTIAL_SUCCESS) {
-                    pobj->status = found_keyword;
+                char * start = (char*)pobj->buffer + (cp - format);
+                char * end = (char*)pobj->buffer + (Format_get_keyword_end(&cp) - format);
+                if (end == start) { // just a default, no keyword
+                    break;
+                }
+                if (!alias_found) {
+                    KeywordMap_init(&pobj->map, PARTIAL_ALIAS_MAP_SIZE);
+                    alias_found = true;
+                    if (!buffered_format) {
+                        pobj->status = Partial_buffer_format(pobj, index, &buf_loc, format);
+                        if (pobj->status == PARTIAL_SUCCESS) {
+                            buffered_format = true;
+                        } else {
+                            return pobj->status;
+                        }
+                    }
+                }
+                *end = '\0'; // do I even need end?
+                pobj->status = Partial_set_alias(pobj, index - 1, start);
+                if (pobj->status != PARTIAL_SUCCESS) {
                     return pobj->status;
                 }
+                
                 break;
             }
             case FORMAT_DEFAULT_START: { // also covers RETURN_SENTINEL
@@ -419,9 +488,26 @@ static size_t Partial_parse_format(Partial * pobj, char * format) {
                 if (index != 1) { // index == 1 mean sentinel for return type, which cannot have a default value. maybe do not need found_return variable    
                     Format_skip_whitespace(&cp);
                     char * start = cp;
-                    partial_status found_default = Partial_set_default(pobj, index - 1, start, Format_get_default_end(&cp));
-                    if (found_default != PARTIAL_SUCCESS) {
-                        pobj->status = found_default;
+                    // if default is c-str, use pointer to place in format after it is buffered
+                    if (pobj->args[index-1].type->id == PARTIAL_CSTRING) {
+                        if (!buffered_format) {
+                            pobj->status = Partial_buffer_format(pobj, index, &buf_loc, format);
+                            if (pobj->status == PARTIAL_SUCCESS) {
+                                buffered_format = true;
+                            } else {
+                                return pobj->status;
+                            }
+                        }
+                        // TODO: need to set default from format string in buffer...not from format string in input
+                        start = (char *)pobj->buffer + (start - format);
+                        char * end = (char *)pobj->buffer + (Format_get_default_end(&cp) - format);
+                        *end = '\0'; // change the string in the buffer. Do I even need the end value?
+                        pobj->status = Partial_set_default(pobj, index - 1, start, end);
+                        
+                    } else {
+                        pobj->status = Partial_set_default(pobj, index - 1, start, Format_get_default_end(&cp));
+                    }
+                    if (pobj->status != PARTIAL_SUCCESS) {
                         return pobj->status;
                     }
                 }
@@ -441,6 +527,8 @@ static size_t Partial_parse_format(Partial * pobj, char * format) {
             }
         }
     }
+
+
 
     return buf_loc;
 }
@@ -668,6 +756,11 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             memcpy(pobj->buffer + pobj->args[arg_index].buf_loc, &pf, pobj->args[arg_index].type->size);
             break;
         }
+        case PARTIAL_CSTRING: {
+            char * pc = va_arg(*args, char *);
+            memcpy(pobj->buffer + pobj->args[arg_index].buf_loc, &pc, pobj->args[arg_index].type->size);
+            break;
+        }
         default: {
             pobj->status = PARTIAL_UNSUPPORTED_TYPE;
             break;
@@ -747,21 +840,13 @@ partial_status Partial_bind_nargs(Partial * pobj, unsigned int nargin, ...) {
     return pobj->status;
 }
 
-// TODO:
-static inline unsigned int kwarg_map(Partial * pobj, char * key) {
-    if (!key) {
-        return pobj->narg; // an index >= pobj->narg will indicate an error
-    }
-    return 0;
-}
-
 partial_status vPartial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, va_list kwargs) {
     if (!pobj) {
         return PARTIAL_VALUE_ERROR;
     }
     unsigned int i = 0;
     while (i < nkwargin && (pobj->status == PARTIAL_SUCCESS)) {
-        unsigned int j = kwarg_map(pobj, va_arg(kwargs, char *));
+        unsigned int j = KeywordMap_get(&pobj->map, va_arg(kwargs, char *));
         if (j < pobj->narg) {
             pobj->status = Partial_bind_arg(pobj, j, &kwargs);
         } else {
