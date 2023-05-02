@@ -41,8 +41,8 @@ List of accepted types and their format specifiers
 
 | type                  | specifier | notes |
 | --------------------- | --------- | ----- |
-| void                  | %v        | should only use for return value |
-| bool                  | %b        | |
+| void                  | %v        | should only use for return value, no defaults, no keywords |
+| bool                  | %b        | acceptable defaults are `true` and `false` |
 | char                  | %c        | |
 | unsigned char         | %cu       | WARNING: this might change to be consistent with <br/> sscanf/printf |
 | short                 | %hd       | |
@@ -53,11 +53,12 @@ List of accepted types and their format specifiers
 | unsigned long         | %lu       | |
 | long long             | %lld      | |
 | unsigned long long    | %llu      | |
-| size_t                | %zu       | may only work on Windows for MinGW64. <br/> See make files for appropriate flags in this case |
+| size_t                | %zu       | For Windows, may only work with MinGW64. <br/> See make files for appropriate flags in this case |
 | float                 | %f        | |
 | double                | %lf       | |
 | long double           | %LF       | On systems without long double, defaults to double (due to libffi) |
-| void *                | %p        | Any object pointer. In future, a %s specifier may be <br/> added for char * cstr to allow cstr default values |
+| void *                | %p        | Any object pointer. In future, a %s specifier may be <br/> added for char * cstr to allow cstr default values <br/> Only valid default is NULL |
+| cstr (char*)          | %s        | special case for handling char * inputs that need <br/> defaults. If no default is needed, best to use void *. <br/> Note that because of the way buffer/format handling is done<br/>, the cstr default value lifetime is the partial object,<br/> NOT the life of a string literal/string used as format |
 
 ### Example
 

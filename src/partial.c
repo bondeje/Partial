@@ -333,12 +333,23 @@ static partial_status Partial_set_default(Partial * pobj, unsigned int index, ch
     buffer[i] = '\0';
 
     // need to handle special case of c-str and void *
+    // might be better to use a switch statement
     if (pobj->args[index].type->id == PARTIAL_PVOID) {
         if (strcmp(buffer, "NULL")) { 
             return (pobj->status = PARTIAL_TYPE_ERROR);
         }
         void * v = NULL;
         memcpy(pobj->buffer + pobj->args[index].buf_loc, &v, sizeof(void*));
+    } else if (pobj->args[index].type->id == PARTIAL_BOOL) {
+        bool default_bool = false;
+        if (!strcmp(buffer, "true")) {
+            default_bool = true;
+        } else if (!strcmp(buffer, "false")) {
+            default_bool = false;
+        } else {
+            return (pobj->status = PARTIAL_TYPE_ERROR);
+        }
+        memcopy(pobj->buffer + pobj->args[index].buf_loc, &default_bool, sizeof(bool));
     } else if (pobj->args[index].type->id == PARTIAL_CSTRING) {
         memcpy(pobj->buffer + pobj->args[index].buf_loc, &start, sizeof(char*));
     } else {
