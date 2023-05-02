@@ -63,6 +63,11 @@ struct PartialType {
     unsigned short id;
 };
 
+typedef struct VA_LIST {
+    va_list args;
+} VA_LIST;
+
+
 typedef void (*voidpfunc)();
 typedef void* (*pvoidpfunc)();
 
@@ -334,31 +339,32 @@ static partial_status Partial_set_default(Partial * pobj, unsigned int index, ch
         }
         void * v = NULL;
         memcpy(pobj->buffer + pobj->args[index].buf_loc, &v, sizeof(void*));
-        return pobj->status;
-    }
-    
-    // set format code for sscanf
-    char format[PARTIAL_FORMAT_BUFFER_SIZE];
-    i = 0;
-    format[i] = '%';
-    i++;
-    if (pobj->args[index].type->id == PARTIAL_UCHAR) { // special case of unsigned char until i a better use case is defined.
-        format[i] = 'c';
-        i++;
+    } else if (pobj->args[index].type->id == PARTIAL_CSTRING) {
+        memcpy(pobj->buffer + pobj->args[index].buf_loc, &start, sizeof(char*));
     } else {
-        char * f = pobj->args[index].type->fmt_code;
-        while (*f != '\0') {
-            format[i] = *f;
-            f++;
+        // set format code for sscanf
+        char format[PARTIAL_FORMAT_BUFFER_SIZE];
+        i = 0;
+        format[i] = '%';
+        i++;
+        if (pobj->args[index].type->id == PARTIAL_UCHAR) { // special case of unsigned char until i a better use case is defined.
+            format[i] = 'c';
             i++;
-            if (i >= PARTIAL_FORMAT_BUFFER_SIZE) {
-                return (pobj->status = PARTIAL_INSUFFICIENT_BUFFER_SIZE);
+        } else {
+            char * f = pobj->args[index].type->fmt_code;
+            while (*f != '\0') {
+                format[i] = *f;
+                f++;
+                i++;
+                if (i >= PARTIAL_FORMAT_BUFFER_SIZE) {
+                    return (pobj->status = PARTIAL_INSUFFICIENT_BUFFER_SIZE);
+                }
             }
         }
-    }
-    format[i] = '\0';
+        format[i] = '\0';
 
-    sscanf(buffer, format, (void*)(pobj->buffer + pobj->args[index].buf_loc)); // not sure this is going to work
+        sscanf(buffer, format, (void*)(pobj->buffer + pobj->args[index].buf_loc)); // not sure this is going to work
+    }
     return pobj->status;
 }
 
@@ -611,7 +617,7 @@ partial_status Partial_init(Partial * pobj, partial_abi abi, FUNC_PROTOTYPE(func
     return pobj->status;
 }
 
-static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index, va_list * args) {
+static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index, VA_LIST * args) {
     arg_index += PARTIAL_ARG_START_INDEX;
 #ifdef DEVELOPMENT
     printf("copying to buffer values: ");
@@ -622,7 +628,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_BOOL: {
-            bool b = (bool) va_arg(*args, int);
+            bool b = (bool) va_arg(args->args, int);
 #ifdef DEVELOPMENT
             printf("%s, ", b ? "true" : "false");
 #endif
@@ -630,7 +636,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_CHAR: {
-            char c = (char) va_arg(*args, int);
+            char c = (char) va_arg(args->args, int);
 #ifdef DEVELOPMENT
             printf("%c, ", c);
 #endif
@@ -638,7 +644,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_UCHAR: {
-            unsigned char cu = (unsigned char) va_arg(*args, unsigned int);
+            unsigned char cu = (unsigned char) va_arg(args->args, unsigned int);
 #ifdef DEVELOPMENT
             printf("%c, ", cu);
 #endif
@@ -646,7 +652,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_SHORT: {
-            short hd = (short) va_arg(*args, int);
+            short hd = (short) va_arg(args->args, int);
 #ifdef DEVELOPMENT
             printf("%hd, ", hd);
 #endif
@@ -654,7 +660,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_USHORT: {
-            unsigned short hu = (unsigned short) va_arg(*args, unsigned int);
+            unsigned short hu = (unsigned short) va_arg(args->args, unsigned int);
 #ifdef DEVELOPMENT
             printf("%hu, ", hu);
 #endif
@@ -662,7 +668,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_INT: {
-            int d = va_arg(*args, int);
+            int d = va_arg(args->args, int);
 #ifdef DEVELOPMENT
             printf("%d, ", d);
 #endif
@@ -670,7 +676,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_UINT: {
-            unsigned int u = va_arg(*args, unsigned int);
+            unsigned int u = va_arg(args->args, unsigned int);
 #ifdef DEVELOPMENT
             printf("%u, ", u);
 #endif
@@ -678,7 +684,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_LONG: {
-            long ld = va_arg(*args, long);
+            long ld = va_arg(args->args, long);
 #ifdef DEVELOPMENT
             printf("%ld, ", ld);
 #endif
@@ -686,7 +692,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_ULONG: {
-            unsigned long lu = va_arg(*args, unsigned long);
+            unsigned long lu = va_arg(args->args, unsigned long);
 #ifdef DEVELOPMENT
             printf("%lu, ", lu);
 #endif
@@ -694,7 +700,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_LLONG: {
-            long long lld = va_arg(*args, long long);
+            long long lld = va_arg(args->args, long long);
 #ifdef DEVELOPMENT
             printf("%lld, ", lld);
 #endif
@@ -702,7 +708,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_ULLONG: {
-            unsigned long long llu = va_arg(*args, unsigned long long);
+            unsigned long long llu = va_arg(args->args, unsigned long long);
 #ifdef DEVELOPMENT
             printf("%llu, ", llu);
 #endif
@@ -710,7 +716,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_SIZE_T: {
-            size_t zu = va_arg(*args, size_t);
+            size_t zu = va_arg(args->args, size_t);
 #ifdef DEVELOPMENT
             printf("%zu, ", zu);
 #endif
@@ -718,7 +724,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_FLOAT: {
-            float f = (float) va_arg(*args, double);
+            float f = (float) va_arg(args->args, double);
 #ifdef DEVELOPMENT
             printf("%f, ", f);
 #endif
@@ -726,7 +732,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_DOUBLE: {
-            double lf = va_arg(*args, double);
+            double lf = va_arg(args->args, double);
 #ifdef DEVELOPMENT
             printf("%lf, ", lf);
 #endif
@@ -734,7 +740,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_LDOUBLE: {
-            long double llf = va_arg(*args, long double);
+            long double llf = va_arg(args->args, long double);
 #ifdef DEVELOPMENT
             printf("%LF, ", llf);
 #endif
@@ -742,22 +748,22 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
             break;
         }
         case PARTIAL_PVOID: {
-            void * p = va_arg(*args, void *);
+            void * p = va_arg(args->args, void *);
             memcpy(pobj->buffer + pobj->args[arg_index].buf_loc, &p, pobj->args[arg_index].type->size);
             break;
         }
         case PARTIAL_VOIDPFUNC: {
-            voidpfunc vf = va_arg(*args, voidpfunc);
+            voidpfunc vf = va_arg(args->args, voidpfunc);
             memcpy(pobj->buffer + pobj->args[arg_index].buf_loc, &vf, pobj->args[arg_index].type->size);
             break;
         }
         case PARTIAL_PVOIDPFUNC: {
-            pvoidpfunc pf = va_arg(*args, pvoidpfunc);
+            pvoidpfunc pf = va_arg(args->args, pvoidpfunc);
             memcpy(pobj->buffer + pobj->args[arg_index].buf_loc, &pf, pobj->args[arg_index].type->size);
             break;
         }
         case PARTIAL_CSTRING: {
-            char * pc = va_arg(*args, char *);
+            char * pc = va_arg(args->args, char *);
             memcpy(pobj->buffer + pobj->args[arg_index].buf_loc, &pc, pobj->args[arg_index].type->size);
             break;
         }
@@ -772,7 +778,7 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
     return pobj->status;
 }
 
-static inline partial_status Partial_bind_arg(Partial * pobj, unsigned int index, va_list * arg) {
+static inline partial_status Partial_bind_arg(Partial * pobj, unsigned int index, VA_LIST * arg) {
     if ((pobj->status = Partial_copy_value(pobj, index, arg)) == PARTIAL_SUCCESS) {
         pobj->argset |= (1 << index);
     }
@@ -783,12 +789,12 @@ partial_status Partial_bind_n(Partial * pobj, unsigned int nargin, ...) {
     if (!pobj) {
         return PARTIAL_VALUE_ERROR;
     }
-    va_list args;
-    va_start(args, nargin);
+    VA_LIST args;
+    va_start(args.args, nargin);
     unsigned int i = 0;
     nargin = nargin > pobj->narg ? pobj->narg : nargin;
     while (i < nargin && (pobj->status == PARTIAL_SUCCESS)) {
-        unsigned int index = va_arg(args, unsigned int);
+        unsigned int index = va_arg(args.args, unsigned int);
         if (index < pobj->narg) {
             pobj->status = Partial_bind_arg(pobj, index, &args);
         } else {
@@ -796,7 +802,7 @@ partial_status Partial_bind_n(Partial * pobj, unsigned int nargin, ...) {
         }
         i++;
     }
-    va_end(args);
+    va_end(args.args);
     return pobj->status;
 }
 
@@ -804,22 +810,22 @@ partial_status Partial_bind(Partial * pobj, ...) {
     if (!pobj) {
         return PARTIAL_VALUE_ERROR;
     }
-    va_list args;
-    va_start(args, pobj);
-    int index = va_arg(args, int);
+    VA_LIST args;
+    va_start(args.args, pobj);
+    int index = va_arg(args.args, int);
     while (index != PARTIAL_SENTINEL && (pobj->status == PARTIAL_SUCCESS)) {
         if (index < pobj->narg) {
             pobj->status = Partial_bind_arg(pobj, index, &args);
-            index = va_arg(args, int);
+            index = va_arg(args.args, int);
         } else {
             pobj->status = PARTIAL_KEY_ERROR;
         }
     }
-    va_end(args);
+    va_end(args.args);
     return pobj->status;
 }
 
-partial_status vPartial_bind_nargs(Partial * pobj, unsigned int nargin, va_list args) {
+partial_status vPartial_bind_nargs(Partial * pobj, unsigned int nargin, VA_LIST args) {
     if (!pobj) {
         return PARTIAL_VALUE_ERROR;
     }
@@ -833,20 +839,20 @@ partial_status vPartial_bind_nargs(Partial * pobj, unsigned int nargin, va_list 
 }
 
 partial_status Partial_bind_nargs(Partial * pobj, unsigned int nargin, ...) {
-    va_list(args);
-    va_start(args, nargin);
+    VA_LIST args;
+    va_start(args.args, nargin);
     pobj->status = vPartial_bind_nargs(pobj, nargin, args);
-    va_end(args);
+    va_end(args.args);
     return pobj->status;
 }
 
-partial_status vPartial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, va_list kwargs) {
+partial_status vPartial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, VA_LIST kwargs) {
     if (!pobj) {
         return PARTIAL_VALUE_ERROR;
     }
     unsigned int i = 0;
     while (i < nkwargin && (pobj->status == PARTIAL_SUCCESS)) {
-        unsigned int j = KeywordMap_get(&pobj->map, va_arg(kwargs, char *));
+        unsigned int j = KeywordMap_get(&pobj->map, va_arg(kwargs.args, char *));
         if (j < pobj->narg) {
             pobj->status = Partial_bind_arg(pobj, j, &kwargs);
         } else {
@@ -858,10 +864,10 @@ partial_status vPartial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, va_l
 }
 
 partial_status Partial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, ...) {
-    va_list(kwargs);
-    va_start(kwargs, nkwargin);
+    VA_LIST kwargs;
+    va_start(kwargs.args, nkwargin);
     pobj->status = vPartial_bind_nkwargs(pobj, nkwargin, kwargs);
-    va_end(kwargs);
+    va_end(kwargs.args);
     return pobj->status;
 }
 
@@ -874,8 +880,8 @@ Partial * Partial_new(partial_abi abi, FUNC_PROTOTYPE(func), char * format, unsi
     
     pobj->status = Partial_init(pobj, abi, func, format, NULL, 0, ALLOCED_BUFFER_FLAG | ALLOCED_PARTIAL_FLAG);
 
-    va_list args;
-    va_start(args, nkwargin);
+    VA_LIST args;
+    va_start(args.args, nkwargin);
     if (nargin) {
         pobj->status = vPartial_bind_nargs(pobj, nargin, args);
     }
@@ -883,7 +889,7 @@ Partial * Partial_new(partial_abi abi, FUNC_PROTOTYPE(func), char * format, unsi
         pobj->status = vPartial_bind_nkwargs(pobj, nkwargin, args);
     }
 
-    va_end(args);
+    va_end(args.args);
 
     if (pobj->status != PARTIAL_SUCCESS) {
         Partial_del(pobj);
@@ -894,7 +900,7 @@ Partial * Partial_new(partial_abi abi, FUNC_PROTOTYPE(func), char * format, unsi
 }
 
 // TODO: need a way to identify that all values have been assigned SOMETHING
-partial_status vPartial_call(Partial * pobj, void * ret, unsigned int nargin, va_list args) {
+partial_status vPartial_call(Partial * pobj, void * ret, unsigned int nargin, VA_LIST args) {
     unsigned int i = 0, j = 0;
     ffi_type * ret_type = pobj->args[0].type->ftp;
     ffi_type * arg_types[PARTIAL_MAX_NARG];
@@ -932,18 +938,18 @@ partial_status vPartial_call(Partial * pobj, void * ret, unsigned int nargin, va
 }
 
 partial_status Partial_call(Partial * pobj, void * ret, ...) {
-    va_list args;
-    va_start(args, ret);
+    VA_LIST args;
+    va_start(args.args, ret);
     pobj->status = vPartial_call(pobj, ret, pobj->narg, args);
-    va_end(args);
+    va_end(args.args);
     return pobj->status;
 }
 
 partial_status Partial_call_n(Partial * pobj, void * ret, unsigned int nargin, ...) {
-    va_list args;
-    va_start(args, nargin);
+    VA_LIST args;
+    va_start(args.args, nargin);
     pobj->status = vPartial_call(pobj, ret, nargin, args);
-    va_end(args);
+    va_end(args.args);
     return pobj->status;
 }
 
