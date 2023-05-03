@@ -33,6 +33,7 @@
 #define PARTIAL_DEFAULT_ABI FFI_DEFAULT_ABI
 
 #define DYNAMIC_BUFFER_FLAG 1
+#define PYTHON_STYLE 4
 
 #define PARTIAL_SENTINEL -1
 #define EMPTY 
@@ -43,6 +44,7 @@ typedef ffi_abi partial_abi;
 typedef struct PartialType PartialType;
 
 typedef enum partial_status {
+    PARTIAL_CANNOT_FILL_BOUND_ARG = -17,
     PARTIAL_DEFAULT_STRING_TOO_LARGE = -16,
     PARTIAL_KEY_ERROR = -15,
     PARTIAL_NOT_YET_IMPLEMENTED = -14,
@@ -84,14 +86,14 @@ typedef struct Partial {
     partial_status status;
 } Partial;
 
-Partial * Partial_new(partial_abi ABI, FUNC_PROTOTYPE(func), char * format, unsigned int nargin, unsigned int nkwargin, ...);
-partial_status Partial_init(Partial * pobj, partial_abi ABI, FUNC_PROTOTYPE(func), char * format, unsigned char * buffer, size_t buffer_size, unsigned int flags);
-partial_status Partial_bind_n(Partial * pobj, unsigned int nargin, ...);
-partial_status Partial_bind(Partial * pobj, ...); // must end in PARTIAL_SENTINEL
-partial_status Partial_bind_nargs(Partial * pobj, unsigned int nargin, ...);  // fills in arguments from left to right
-partial_status Partial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, ...); // fills in keyword arguments
-
-/* WARNING: the Partial_call* functions are likely to be reworked */
-partial_status Partial_call(Partial * pobj, void * ret, ...); // be very careful. must provide all the arguments not covered by previous calls to _bind or _bind_n
-partial_status Partial_call_n(Partial * pobj, void * ret, unsigned int nargin, ...);
+partial_status Partial_init(Partial * pobj, partial_abi abi, FUNC_PROTOTYPE(func), char * format, unsigned char * buffer, size_t buffer_size, unsigned int flags);
+partial_status Partial_bind_npairs(Partial * pobj, unsigned int nargin, ...);
+partial_status Partial_fill_npairs(Partial * pobj, unsigned int nargin, ...);
+partial_status Partial_bind_nargs(Partial * pobj, unsigned int nargin, ...);
+partial_status Partial_fill_nargs(Partial * pobj, unsigned int nargin, ...);
+partial_status Partial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, ...);
+partial_status Partial_fill_nkwargs(Partial * pobj, unsigned int nkwargin, ...);
+// since ffi_abi always starts at 0, <0 will indicate to use default. user only needs to go below FFI_FIRST_ABI
+Partial * Partial_new(partial_abi abi, FUNC_PROTOTYPE(func), char * format, unsigned int nargin, unsigned int nkwargin, ...);
+partial_status Partial_call(Partial * pobj, void * ret, unsigned int nargin, unsigned int nkwargin, ...);
 void Partial_del(Partial * pobj);

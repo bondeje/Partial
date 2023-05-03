@@ -19,10 +19,10 @@ int main() {
     printf("init status: %d\n", Partial_init(&p, PARTIAL_DEFAULT_ABI, FUNC_CAST(add_int_double), "%lf=%d%lf", buffer, buffer_size, 0));
 
     // bind values to arguments as positions starting from 0. In this case 2.345e-1 is bound to parameter 1 (b)
-    Partial_bind(&p, 1, 2.345e-1, PARTIAL_SENTINEL);
+    Partial_bind_npairs(&p, 1, 1, 2.345e-1);
 
     // call function of Partial with arguments int and double
-    printf("call status: %d\n", Partial_call(&p, &result, -1));
+    printf("call status: %d\n", Partial_call(&p, &result, 1, 0, -1));
     printf("result of calculation: %lf\n", result);
     return 0;
 }

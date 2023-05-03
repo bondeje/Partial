@@ -42,6 +42,12 @@ TODO: implement the aliasing and the corresponding keyword lookup
 #define ALLOCED_BUFFER_FLAG     DYNAMIC_BUFFER_FLAG
 #define ALLOCED_PARTIAL_FLAG    2
 
+#ifdef PARTIAL_PYTHON_STYLE
+#define PARTIAL_DEFAULT_FLAGS ALLOCED_BUFFER_FLAG | ALLOCED_PARTIAL_FLAG | PYTHON_STYLE
+#else
+#define PARTIAL_DEFAULT_FLAGS ALLOCED_BUFFER_FLAG | ALLOCED_PARTIAL_FLAG
+#endif
+
 #define FORMAT_SENTINEL '\0'
 #define FORMAT_TYPE_START '%'
 #define FORMAT_KEYWORD_SENTINEL '}'
@@ -349,7 +355,7 @@ static partial_status Partial_set_default(Partial * pobj, unsigned int index, ch
         } else {
             return (pobj->status = PARTIAL_TYPE_ERROR);
         }
-        memcopy(pobj->buffer + pobj->args[index].buf_loc, &default_bool, sizeof(bool));
+        memcpy(pobj->buffer + pobj->args[index].buf_loc, &default_bool, sizeof(bool));
     } else if (pobj->args[index].type->id == PARTIAL_CSTRING) {
         memcpy(pobj->buffer + pobj->args[index].buf_loc, &start, sizeof(char*));
     } else {
@@ -628,7 +634,7 @@ partial_status Partial_init(Partial * pobj, partial_abi abi, FUNC_PROTOTYPE(func
     return pobj->status;
 }
 
-static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index, VA_LIST * args) {
+static partial_status Partial_copy_pair(Partial * pobj, unsigned int arg_index, VA_LIST * args) {
     arg_index += PARTIAL_ARG_START_INDEX;
 #ifdef DEVELOPMENT
     printf("copying to buffer values: ");
@@ -789,83 +795,122 @@ static partial_status Partial_copy_value(Partial * pobj, unsigned int arg_index,
     return pobj->status;
 }
 
-static inline partial_status Partial_bind_arg(Partial * pobj, unsigned int index, VA_LIST * arg) {
-    if ((pobj->status = Partial_copy_value(pobj, index, arg)) == PARTIAL_SUCCESS) {
+/* 
+semantics:
+Partial_copy_pair copies the argument into place no matter what (we want this behavior from keyword arguments and default values)
+Partial_fill_pair copies the argument into place, but only if it is not bound.
+Partial_bind_pair copies the argument into place not matter what AND sets it as bound, i.e. cannot be filled in
+*/
+
+// index < pobj->narg must be satisfied by caller
+static inline partial_status Partial_fill_pair(Partial * pobj, unsigned int index, VA_LIST * arg) {
+    if (pobj->argset & (1 << index)) {
+        pobj->status = PARTIAL_CANNOT_FILL_BOUND_ARG;
+    } else {
+        pobj->status = Partial_copy_pair(pobj, index, arg);
+    }
+    return pobj->status;
+}
+
+// index < pobj->narg must be satisfied by caller
+static inline partial_status Partial_bind_pair(Partial * pobj, unsigned int index, VA_LIST * arg) {
+    if ((pobj->status = Partial_copy_pair(pobj, index, arg)) == PARTIAL_SUCCESS) {
         pobj->argset |= (1 << index);
     }
     return pobj->status;
 }
 
-partial_status Partial_bind_n(Partial * pobj, unsigned int nargin, ...) {
-    if (!pobj) {
-        return PARTIAL_VALUE_ERROR;
-    }
-    VA_LIST args;
-    va_start(args.args, nargin);
-    unsigned int i = 0;
-    nargin = nargin > pobj->narg ? pobj->narg : nargin;
-    while (i < nargin && (pobj->status == PARTIAL_SUCCESS)) {
-        unsigned int index = va_arg(args.args, unsigned int);
-        if (index < pobj->narg) {
-            pobj->status = Partial_bind_arg(pobj, index, &args);
-        } else {
-            pobj->status = PARTIAL_KEY_ERROR;
-        }
-        i++;
-    }
-    va_end(args.args);
-    return pobj->status;
-}
-
-partial_status Partial_bind(Partial * pobj, ...) {
-    if (!pobj) {
-        return PARTIAL_VALUE_ERROR;
-    }
-    VA_LIST args;
-    va_start(args.args, pobj);
-    int index = va_arg(args.args, int);
-    while (index != PARTIAL_SENTINEL && (pobj->status == PARTIAL_SUCCESS)) {
-        if (index < pobj->narg) {
-            pobj->status = Partial_bind_arg(pobj, index, &args);
-            index = va_arg(args.args, int);
-        } else {
-            pobj->status = PARTIAL_KEY_ERROR;
-        }
-    }
-    va_end(args.args);
-    return pobj->status;
-}
-
-partial_status vPartial_bind_nargs(Partial * pobj, unsigned int nargin, VA_LIST args) {
-    if (!pobj) {
+static partial_status vPartial___npairs(Partial * pobj, partial_status (*f_assign)(Partial *, unsigned int, VA_LIST *), unsigned int nargin, VA_LIST * pairs) {
+    if (!pobj || !f_assign) {
         return PARTIAL_VALUE_ERROR;
     }
     unsigned int i = 0;
     nargin = nargin > pobj->narg ? pobj->narg : nargin;
     while (i < nargin && (pobj->status == PARTIAL_SUCCESS)) {
-        pobj->status = Partial_bind_arg(pobj, i, &args);
+        unsigned int index = va_arg(pairs->args, unsigned int);
+        if (index < pobj->narg) {
+            pobj->status = f_assign(pobj, index, pairs); // want to exit on trying to fill a bound argument here
+        } else {
+            pobj->status = PARTIAL_KEY_ERROR;
+        }
         i++;
+    }
+    return pobj->status;
+}
+
+partial_status Partial_bind_npairs(Partial * pobj, unsigned int nargin, ...) {
+    if (!pobj) {
+        return PARTIAL_VALUE_ERROR;
+    }
+    VA_LIST pairs;
+    va_start(pairs.args, nargin);
+    pobj->status = vPartial___npairs(pobj, Partial_bind_pair, nargin, &pairs);
+    va_end(pairs.args);
+    return pobj->status;
+}
+
+partial_status Partial_fill_npairs(Partial * pobj, unsigned int nargin, ...) {
+    if (!pobj) {
+        return PARTIAL_VALUE_ERROR;
+    }
+    VA_LIST pairs;
+    va_start(pairs.args, nargin);
+    pobj->status = vPartial___npairs(pobj, Partial_fill_pair, nargin, &pairs);
+    va_end(pairs.args);
+    return pobj->status;
+}
+
+static partial_status vPartial___nargs(Partial * pobj, partial_status (*f_assign)(Partial *, unsigned int, VA_LIST *), unsigned int nargin, VA_LIST * args) {
+    if (!pobj || !f_assign) {
+        return PARTIAL_VALUE_ERROR;
+    }
+    unsigned int i = 0, j = 0;
+    nargin = nargin > pobj->narg ? pobj->narg : nargin;
+    while (i < nargin && j < pobj->narg && (pobj->status == PARTIAL_SUCCESS)) {
+        while (j < pobj->narg && f_assign(pobj, j, args) == PARTIAL_CANNOT_FILL_BOUND_ARG) { // here we want to ignore this "error" as a warning
+            j++;
+        }
+        j++;
+        i++;
+    }
+    if (pobj->status == PARTIAL_CANNOT_FILL_BOUND_ARG) {
+        pobj->status = PARTIAL_SUCCESS;
     }
     return pobj->status;
 }
 
 partial_status Partial_bind_nargs(Partial * pobj, unsigned int nargin, ...) {
+    if (!pobj) {
+        return PARTIAL_VALUE_ERROR;
+    }
     VA_LIST args;
     va_start(args.args, nargin);
-    pobj->status = vPartial_bind_nargs(pobj, nargin, args);
+    pobj->status = vPartial___nargs(pobj, Partial_bind_pair, nargin, &args);
     va_end(args.args);
     return pobj->status;
 }
 
-partial_status vPartial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, VA_LIST kwargs) {
+partial_status Partial_fill_nargs(Partial * pobj, unsigned int nargin, ...) {
     if (!pobj) {
         return PARTIAL_VALUE_ERROR;
     }
-    unsigned int i = 0;
+    VA_LIST args;
+    va_start(args.args, nargin);
+    pobj->status = vPartial___nargs(pobj, Partial_fill_pair, nargin, &args);
+    va_end(args.args);
+    return pobj->status;
+}
+
+static partial_status vPartial___nkwargs(Partial * pobj, partial_status (*f_assign)(Partial *, unsigned int, VA_LIST *), unsigned int nkwargin, VA_LIST * kwargs) {
+    if (!pobj || !f_assign) {
+        return PARTIAL_VALUE_ERROR;
+    }
+    unsigned int i = 0, j = 0;
+    nkwargin = nkwargin > pobj->narg ? pobj->narg : nkwargin;
     while (i < nkwargin && (pobj->status == PARTIAL_SUCCESS)) {
-        unsigned int j = KeywordMap_get(&pobj->map, va_arg(kwargs.args, char *));
+        j = KeywordMap_get(&pobj->map, va_arg(kwargs->args, char *));
         if (j < pobj->narg) {
-            pobj->status = Partial_bind_arg(pobj, j, &kwargs);
+            pobj->status = f_assign(pobj, j, kwargs);
         } else {
             pobj->status = PARTIAL_KEY_ERROR;
         }
@@ -877,7 +922,15 @@ partial_status vPartial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, VA_L
 partial_status Partial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, ...) {
     VA_LIST kwargs;
     va_start(kwargs.args, nkwargin);
-    pobj->status = vPartial_bind_nkwargs(pobj, nkwargin, kwargs);
+    pobj->status = vPartial___nkwargs(pobj, Partial_bind_pair, nkwargin, &kwargs);
+    va_end(kwargs.args);
+    return pobj->status;
+}
+
+partial_status Partial_fill_nkwargs(Partial * pobj, unsigned int nkwargin, ...) {
+    VA_LIST kwargs;
+    va_start(kwargs.args, nkwargin);
+    pobj->status = vPartial___nkwargs(pobj, Partial_fill_pair, nkwargin, &kwargs);
     va_end(kwargs.args);
     return pobj->status;
 }
@@ -889,17 +942,16 @@ Partial * Partial_new(partial_abi abi, FUNC_PROTOTYPE(func), char * format, unsi
         return NULL;
     }
     
-    pobj->status = Partial_init(pobj, abi, func, format, NULL, 0, ALLOCED_BUFFER_FLAG | ALLOCED_PARTIAL_FLAG);
+    pobj->status = Partial_init(pobj, abi, func, format, NULL, 0, PARTIAL_DEFAULT_FLAGS);
 
     VA_LIST args;
     va_start(args.args, nkwargin);
-    if (nargin) {
-        pobj->status = vPartial_bind_nargs(pobj, nargin, args);
+    if (pobj->status == PARTIAL_SUCCESS && nargin) {
+        pobj->status = vPartial___nargs(pobj, Partial_bind_pair, nargin, &args);
     }
-    if (nkwargin) {
-        pobj->status = vPartial_bind_nkwargs(pobj, nkwargin, args);
+    if (pobj->status == PARTIAL_SUCCESS && nkwargin) {
+        pobj->status = vPartial___nkwargs(pobj, Partial_bind_pair, nkwargin, &args);
     }
-
     va_end(args.args);
 
     if (pobj->status != PARTIAL_SUCCESS) {
@@ -910,19 +962,24 @@ Partial * Partial_new(partial_abi abi, FUNC_PROTOTYPE(func), char * format, unsi
     return pobj;
 }
 
-// TODO: need a way to identify that all values have been assigned SOMETHING
-partial_status vPartial_call(Partial * pobj, void * ret, unsigned int nargin, VA_LIST args) {
-    unsigned int i = 0, j = 0;
+static partial_status vPartial_call(Partial * pobj, void * ret, unsigned int nargin, unsigned int nkwargin, VA_LIST * args) {
+    if (!pobj) {
+        return PARTIAL_VALUE_ERROR;
+    } else if (!ret && (pobj->args[0].type->id != PARTIAL_VOID)) {
+        return (pobj->status = PARTIAL_VALUE_ERROR);
+    }
+    if (pobj->status == PARTIAL_SUCCESS && nargin) {
+        pobj->status = vPartial___nargs(pobj, Partial_fill_pair, nargin, args);
+    }
+    if (pobj->status == PARTIAL_SUCCESS && nkwargin) {
+        pobj->status = vPartial___nkwargs(pobj, Partial_fill_pair, nkwargin, args);
+    }
+
+    unsigned int i = 0;
     ffi_type * ret_type = pobj->args[0].type->ftp;
     ffi_type * arg_types[PARTIAL_MAX_NARG];
     void * arg_values[PARTIAL_MAX_NARG];
-    while (i < pobj->narg && j < nargin) {
-        if (!(pobj->argset & (1 << i))) { // assign next value from args into argument index i
-            if ((pobj->status = Partial_copy_value(pobj, i, &args)) != PARTIAL_SUCCESS) {
-                return pobj->status;
-            }
-            j++;
-        }
+    while (i < pobj->narg) {
         arg_values[i] = (void*)(pobj->buffer + pobj->args[i+PARTIAL_ARG_START_INDEX].buf_loc);
         arg_types[i] = pobj->args[i+PARTIAL_ARG_START_INDEX].type->ftp; // since i++ occurs before...DO NOT include PARTIAL_ARG_START_INDEX
         i++;
@@ -948,18 +1005,13 @@ partial_status vPartial_call(Partial * pobj, void * ret, unsigned int nargin, VA
     return pobj->status;
 }
 
-partial_status Partial_call(Partial * pobj, void * ret, ...) {
+partial_status Partial_call(Partial * pobj, void * ret, unsigned int nargin, unsigned int nkwargin, ...) {
+    if (!pobj) {
+        return PARTIAL_VALUE_ERROR;
+    }
     VA_LIST args;
-    va_start(args.args, ret);
-    pobj->status = vPartial_call(pobj, ret, pobj->narg, args);
-    va_end(args.args);
-    return pobj->status;
-}
-
-partial_status Partial_call_n(Partial * pobj, void * ret, unsigned int nargin, ...) {
-    VA_LIST args;
-    va_start(args.args, nargin);
-    pobj->status = vPartial_call(pobj, ret, nargin, args);
+    va_start(args.args, nkwargin);
+    pobj->status = vPartial_call(pobj, ret, nargin, nkwargin, &args);
     va_end(args.args);
     return pobj->status;
 }

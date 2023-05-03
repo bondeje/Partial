@@ -16,14 +16,14 @@ Partial partial_obj;
 unsigned char buffer[estimated buffer size to hold memory of input arguments];
 ```
 
-For any function that satisfies the limitations below, make 4 calls:
+For any function that satisfies the limitations below, make 3 (+1 optional for purely static allocation) calls:
 
 ```
 Partial_init(Partial * p, partial_abi ABI, function pointer, char * format, unsigned char * buffer, size_t buffer_size, unsigned int flags)
 
 
 // bind pairs of values to function call. index specifies which argument is set and value is the corresponding value. PARTIAL_SENTINEL to end sequence
-Partial_bind(Partial * p, index_0, value_0, index_1, value_1, ..., PARTIAL_SENTINEL);
+Partial_bind_npairs(Partial * p, N, index_0, value_0, index_1, value_1, ..., index_N-1, value_N-1);
 
 /*
 For any given `Partial` object, once a value is bound, it currently cannot be unbound. `Partial_bind` may be called multiple times on the same object and overwrite bound values.
@@ -31,10 +31,61 @@ For any given `Partial` object, once a value is bound, it currently cannot be un
 
 // call the function. For output_type = `void` omit the LHS.
 // fill in non-bound values from left to right to use in call.
-Partial_call(Partial * p, void * return_value, val_0, val_1, ...);
+Partial_call(Partial * p, void * return_value, N, M, val_0, val_1, ..., val_N-1, key_0, kval_0, key_0, kval_0, ..., key_M-1, kval_M-1);
 
 // if statically allocating the Partial object and buffer, this is unnecessary, but if you're not sure whether any part was allocated, use this anyway.
 Partial_del(Partial * p);
+```
+
+For setting values after `Partial_new` or `Partial_init` but before `Partial_call`, there are functions of the prototype: `Partial_[action]_n[param type]` where the `[action]` values are "bind" or "fill" and `[param type]` are "pairs", "args", or "kwargs". The semantics of the `[action]` values are such that "bind" will set values defined by parameters and set them as "bound", i.e. they can only be overwritten by another bind, while "fill" will set values only on non-"bound arguments". The `[param type]` values mean:
+
+"kwargs" - the variadic is filled with pairs of (cstr keywords, value) where cstr must be a keyword that was set in the format to a call to `Partial_new` or `Partial_init`.
+"pairs" - the variadic is filled with pairs of (index, value) where index is the <b>input<b/> argument index starting from 0 and value is the value to be filled/bound.
+"args" - the variadic is just a list of values, which will be copied based on the semantics of the `[action]`. Note that unlike "kwargs" and "pairs", the argument location is not specified. In the case of `[action]=bind`, the values are filled from left to right starting at input argument index 0. In the case of `[action]=fill`, the values are filled from left to right in non-"bound" arguments.
+
+`Partial_new` follows the semantics of `Partial_bind_*`
+
+`Partial_call` follows the semantics of `Partial_fill_*`
+
+Note that the above is explicitly different from the simple application of `functools.partial` in Python.
+
+```
+#Python:
+from functools import partial
+
+def my_func(a, b, c, d):
+    # my_func implementation
+
+a = partial(1, c=3)
+#b = a(2,4)             # error in Python because d does not get assigned a value
+c = a(2, d=4)           # my_func(1, 2, 3, 4)
+d = a(2, c=5, d=4)      # my_func(1,2,5,4), repeat of c overwrites original in creation of partial
+
+//C equivalent calls...slightly different behavior
+char my_func_SIG = "%v=%d%d%d{c}%d{d}"; // format signature for my_func use in Partial*
+void my_func(int a, int b, int c, int d)
+
+Partial * p = Partial_new(-1, FUNC_CAST(my_func), my_func_SIG, 1, 1, 1, "c", 3);
+Partial_call(p, NULL, 2, 0, 2, 4);              // unlike Python, this will call my_func(1, 2, 3, 4);
+Partial_call(p, NULL, 1, 1, 2, "d", 4);         // this is explicitly my_func(1,2,3,4), same as Python
+Partial_call(p, NULL, 1, 1, 2, "d", 4, "c", 5); // this will fail trying to fill in a bound value
+Partial_del(p);
+
+```
+
+In general, there is currently no (easy) way to exactly replicate Python's `functools.partial` behavior, but I might add a configuration flag for Python style, which could add a lot more memory usage.
+
+Specific example of `Partial_fill_nargs`:
+
+```
+void my_func(int a, int b, int c, int d);
+
+Partial p;
+Partial_init(&p, -1, FUNC_CAST(my_func), ...);
+Partial_fill_nargs(&p, 2, 0, 1);                // sets a = 0, and b = 1 but neither are bound
+Partial_bind_npairs(&p, 2, 0, 3, 2, 4);         // sets and binds a = 3, and c = 4.
+Partial_fill_nargs(&p, 1, 2);                   // sets b = 2, but not bound
+Partial_call(&p, NULL, 2, 0, 5, 6);             // calls my_func(3, 5, 4, 6); // overwrites b = 2 from previous call, because Partial_call internally uses Partial_fill_nargs
 ```
 
 List of accepted types and their format specifiers
@@ -77,17 +128,18 @@ int main() {
     
     // static allocation example
     Partial p;
+    // in general this must account for promotions.
     size_t buffer_size = sizeof(int) + sizeof(double);
     unsigned char buffer[sizeof(int) + sizeof(double)]; 
 
     // initialize partial using function "add_int_double" that uses buffer of size buffer_size (there is buffer overflow checking) to potentially store int and double arguments for execution
-    Partial_init(&p, PARTIAL_DEFAULT_ABI, FUNC_CAST(add_int_double), "%lf=%d%lf", buffer, buffer_size, 0);
+    Partial_init(&p, PARTIAL_DEFAULT_ABI, FUNC_CAST(add_int_double), "%lf=%d%lf", buffer, buffer_size, 0)
 
     // bind values to arguments as positions starting from 0. In this case 2.345e-1 is bound to parameter 1 (b)
-    Partial_bind(&p, 1, 2.345e-1, PARTIAL_SENTINEL);
+    Partial_bind_npairs(&p, 1, 1, 2.345e-1);
 
     // call function of Partial with arguments int and double
-    Partial_call(&p, &result, -1);
+    printf("call status: %d\n", Partial_call(&p, &result, 1, 0, -1));
     printf("result of calculation: %lf\n", result);
     return 0;
 }
