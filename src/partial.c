@@ -39,15 +39,6 @@ TODO: implement the aliasing and the corresponding keyword lookup
 
 #define DEFAULT_DYN_BUFFER_SIZE 64
 
-#define ALLOCED_BUFFER_FLAG     DYNAMIC_BUFFER_FLAG
-#define ALLOCED_PARTIAL_FLAG    2
-
-#ifdef PARTIAL_PYTHON_STYLE
-#define PARTIAL_DEFAULT_FLAGS ALLOCED_BUFFER_FLAG | ALLOCED_PARTIAL_FLAG | PYTHON_STYLE
-#else
-#define PARTIAL_DEFAULT_FLAGS ALLOCED_BUFFER_FLAG | ALLOCED_PARTIAL_FLAG
-#endif
-
 #define FORMAT_SENTINEL '\0'
 #define FORMAT_TYPE_START '%'
 #define FORMAT_KEYWORD_SENTINEL '}'
@@ -576,7 +567,8 @@ partial_status Partial_init(Partial * pobj, partial_abi abi, FUNC_PROTOTYPE(func
     }
 
     pobj->narg = 0;
-    pobj->argset = 0;
+    pobj->arg_bound = 0;
+    pobj->py_keys = 0;
     pobj->func = func;
     if (abi < FFI_FIRST_ABI || abi > FFI_DEFAULT_ABI) {
         abi = FFI_DEFAULT_ABI;
@@ -596,6 +588,11 @@ partial_status Partial_init(Partial * pobj, partial_abi abi, FUNC_PROTOTYPE(func
     }
 
     size_t buf_loc = Partial_parse_format(pobj, format);
+
+    if (pobj->flags & PYTHON_STYLE) {
+        // double up stack with args and kwargs
+        buf_loc += buf_loc - pobj->args[0].buf_loc;
+    }
 
     // TODO: fix the logic here. some of the if-then checks are redundant since malloced are set to NULL
     if (pobj->flags & ALLOCED_BUFFER_FLAG) {
@@ -624,12 +621,13 @@ partial_status Partial_init(Partial * pobj, partial_abi abi, FUNC_PROTOTYPE(func
             }
             pobj->buffer_size = buf_loc;
         }
-    } else {
-        if (pobj->buffer_size < buf_loc) {
-            pobj->status = PARTIAL_INSUFFICIENT_BUFFER_SIZE;
-            return pobj->status;
-        }
+    } else if (pobj->buffer_size < buf_loc) {
+        pobj->status = PARTIAL_INSUFFICIENT_BUFFER_SIZE;
+        return pobj->status;
     }
+
+    // set stack size
+    pobj->stack_size = pobj->args[pobj->narg].buf_loc + pobj->args[pobj->narg].type->size - pobj->args[0].buf_loc;
 
     return pobj->status;
 }
@@ -804,7 +802,7 @@ Partial_bind_pair copies the argument into place not matter what AND sets it as 
 
 // index < pobj->narg must be satisfied by caller
 static inline partial_status Partial_fill_pair(Partial * pobj, unsigned int index, VA_LIST * arg) {
-    if (pobj->argset & (1 << index)) {
+    if (pobj->arg_bound & (1 << index)) {
         pobj->status = PARTIAL_CANNOT_FILL_BOUND_ARG;
     } else {
         pobj->status = Partial_copy_pair(pobj, index, arg);
@@ -815,7 +813,7 @@ static inline partial_status Partial_fill_pair(Partial * pobj, unsigned int inde
 // index < pobj->narg must be satisfied by caller
 static inline partial_status Partial_bind_pair(Partial * pobj, unsigned int index, VA_LIST * arg) {
     if ((pobj->status = Partial_copy_pair(pobj, index, arg)) == PARTIAL_SUCCESS) {
-        pobj->argset |= (1 << index);
+        pobj->arg_bound |= (1 << index);
     }
     return pobj->status;
 }
@@ -950,7 +948,20 @@ Partial * Partial_new(partial_abi abi, FUNC_PROTOTYPE(func), char * format, unsi
         pobj->status = vPartial___nargs(pobj, Partial_bind_pair, nargin, &args);
     }
     if (pobj->status == PARTIAL_SUCCESS && nkwargin) {
+        size_t temp_arg_bound = pobj->arg_bound; // temporary storage
+        if (pobj->flags & PYTHON_STYLE) {
+            pobj->arg_bound = 0;
+        }
         pobj->status = vPartial___nkwargs(pobj, Partial_bind_pair, nkwargin, &args);
+        if (pobj->flags & PYTHON_STYLE) {
+            pobj->py_keys = pobj->arg_bound;
+            pobj->arg_bound = temp_arg_bound; // reset bound arguments to the arguments
+        }
+        
+    }
+    if (pobj->status == PARTIAL_SUCCESS && pobj->flags & PYTHON_STYLE) {
+        unsigned char * stack = pobj->buffer + pobj->args[0].buf_loc;
+        memcpy(stack + pobj->stack_size, stack, pobj->stack_size);
     }
     va_end(args.args);
 
@@ -971,8 +982,23 @@ static partial_status vPartial_call(Partial * pobj, void * ret, unsigned int nar
     if (pobj->status == PARTIAL_SUCCESS && nargin) {
         pobj->status = vPartial___nargs(pobj, Partial_fill_pair, nargin, args);
     }
+    if (pobj->flags & PYTHON_STYLE & pobj->py_keys) {
+        for (unsigned int i = 0; i < pobj->narg; i++) {
+            if (pobj->py_keys & (1 << i)) { // argument was assigned as a keyword in Partial_call
+                unsigned char * start = pobj->buffer + pobj->args[i + PARTIAL_ARG_START_INDEX].buf_loc;
+                memcpy(start, start + pobj->stack_size, pobj->args[i + PARTIAL_ARG_START_INDEX].type->size);
+            }
+        }
+    }
     if (pobj->status == PARTIAL_SUCCESS && nkwargin) {
+        size_t temp_arg_bound = pobj->arg_bound;
+        if (pobj->flags & PYTHON_STYLE) {
+            pobj->arg_bound = 0;
+        }
         pobj->status = vPartial___nkwargs(pobj, Partial_fill_pair, nkwargin, args);
+        if (pobj->flags & PYTHON_STYLE) {
+            pobj->arg_bound = temp_arg_bound;
+        }
     }
 
     unsigned int i = 0;
@@ -1002,6 +1028,12 @@ static partial_status vPartial_call(Partial * pobj, void * ret, unsigned int nar
     }
     
     ffi_call(&cif, pobj->func, ret, arg_values);
+
+    if (pobj->flags & PYTHON_STYLE && (pobj->arg_bound || pobj->py_keys)) {
+        unsigned char * stack = pobj->buffer + pobj->args[0].buf_loc;
+        memcpy(stack, stack + pobj->stack_size, pobj->stack_size);
+    }
+
     return pobj->status;
 }
 

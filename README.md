@@ -113,7 +113,7 @@ List of accepted types and their format specifiers
 
 ### Example
 
-This is a risky example that requires a sentinel in `Partial_bind` and a variadic not controller by the caller in `Partial_call`. `Partial_bind_n` and `Partial_call_n` are safer, and just add a parameter for the number of variadic arguments (`Partial_call*`)/pairs (`Partial_bind*`) before the ellipsis. A better example is forthcoming.
+Add an int to a bound double.
 
 ```
 #include <stdio.h>

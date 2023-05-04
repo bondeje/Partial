@@ -32,8 +32,16 @@
 
 #define PARTIAL_DEFAULT_ABI FFI_DEFAULT_ABI
 
-#define DYNAMIC_BUFFER_FLAG 1
-#define PYTHON_STYLE 4
+#define ALLOCED_BUFFER_FLAG     1
+#define ALLOCED_PARTIAL_FLAG    2
+#define PYTHON_STYLE            4
+
+// use only as flag at compile time
+#ifdef PARTIAL_PYTHON_STYLE
+#define PARTIAL_DEFAULT_FLAGS ALLOCED_BUFFER_FLAG | ALLOCED_PARTIAL_FLAG | PYTHON_STYLE
+#else
+#define PARTIAL_DEFAULT_FLAGS ALLOCED_BUFFER_FLAG | ALLOCED_PARTIAL_FLAG
+#endif
 
 #define PARTIAL_SENTINEL -1
 #define EMPTY 
@@ -76,9 +84,11 @@ typedef struct Partial {
     FUNC_PROTOTYPE(func);
     //void* (*func)(); // cannot use this. libffi uses void (*)(void)...for some weird reason. I thought this explicitly excluded arguments
     PartialArg args[PARTIAL_MAX_NARG+1]; // first is for return value
-    size_t argset; // flags for frozen data
+    size_t arg_bound; // flags for frozen data
+    size_t py_keys; // for python_style keys
     // when keywords are implemented, add a c-str to int map element
     size_t buffer_size;
+    size_t stack_size;
     unsigned char * buffer;
     unsigned int flags; // for tracking memory allocations
     unsigned int narg;
@@ -86,13 +96,17 @@ typedef struct Partial {
     partial_status status;
 } Partial;
 
+
 partial_status Partial_init(Partial * pobj, partial_abi abi, FUNC_PROTOTYPE(func), char * format, unsigned char * buffer, size_t buffer_size, unsigned int flags);
+partial_status Partial_bind_nargs(Partial * pobj, unsigned int nargin, ...);
+#ifndef PARTIAL_PYTHON_STYLE
 partial_status Partial_bind_npairs(Partial * pobj, unsigned int nargin, ...);
 partial_status Partial_fill_npairs(Partial * pobj, unsigned int nargin, ...);
-partial_status Partial_bind_nargs(Partial * pobj, unsigned int nargin, ...);
 partial_status Partial_fill_nargs(Partial * pobj, unsigned int nargin, ...);
 partial_status Partial_bind_nkwargs(Partial * pobj, unsigned int nkwargin, ...);
+#endif
 partial_status Partial_fill_nkwargs(Partial * pobj, unsigned int nkwargin, ...);
+
 // since ffi_abi always starts at 0, <0 will indicate to use default. user only needs to go below FFI_FIRST_ABI
 Partial * Partial_new(partial_abi abi, FUNC_PROTOTYPE(func), char * format, unsigned int nargin, unsigned int nkwargin, ...);
 partial_status Partial_call(Partial * pobj, void * ret, unsigned int nargin, unsigned int nkwargin, ...);
