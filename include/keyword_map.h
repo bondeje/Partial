@@ -25,7 +25,7 @@ void KeywordMap_init(AliasMap * map, unsigned int size);
 // 0 for succes, -1 for failure
 int KeywordMap_add(AliasMap * map, const char * key, unsigned int value);
 
-unsigned int KeywordMap_get(AliasMap * map, const char * key);
+unsigned int * KeywordMap_get(AliasMap * map, const char * key);
 
 static inline unsigned int KeywordMap_size(AliasMap * map) {
     return map->size;

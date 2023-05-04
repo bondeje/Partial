@@ -60,18 +60,24 @@ int KeywordMap_add(AliasMap * map, const char * key, unsigned int value) {
     return 0;
 }
 
-unsigned int KeywordMap_get(AliasMap * map, const char * key) {
+unsigned int * KeywordMap_get(AliasMap * map, const char * key) {
 #ifdef DEVELOPMENT
-    printf("getting keyword\n");
+    printf("getting keyword...");
 #endif
     unsigned long long bin = cstr_hash(key, map->size);
     unsigned int i = 0;
+    if (!map->bins[bin].key) {
+        return NULL;
+    }
     while (i < map->size && strcmp(key, map->bins[bin].key)) {
         bin = ((bin + 1) % map->size);
         i++;
     }
     if (i == map->size) {
-        return map->size;
+        return NULL;
     }
-    return map->bins[bin].value;
+#ifdef DEVELOPMENT
+    printf("%u\n", map->bins[bin].value);
+#endif
+    return &map->bins[bin].value;
 }

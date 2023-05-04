@@ -320,6 +320,7 @@ static partial_status Partial_set_default(Partial * pobj, unsigned int index, ch
 #endif
 
     // copy default into temporary buffer c-string
+    // TODO: use memcpy to replace next few lines
     char buffer[PARTIAL_MAX_DEFAULT_SIZE];
     unsigned int i = 0; // because of check above, i cannot be >= PARTIAL_MAX_DEFAULT_SIZE
     while (start != end) {
@@ -490,7 +491,7 @@ static size_t Partial_parse_format(Partial * pobj, char * format) {
                     }
                 }
                 *end = '\0'; // do I even need end?
-                pobj->status = Partial_set_alias(pobj, index - 1, start);
+                pobj->status = Partial_set_alias(pobj, index - 2, start);
                 if (pobj->status != PARTIAL_SUCCESS) {
                     return pobj->status;
                 }
@@ -516,10 +517,10 @@ static size_t Partial_parse_format(Partial * pobj, char * format) {
                         start = (char *)pobj->buffer + (start - format);
                         char * end = (char *)pobj->buffer + (Format_get_default_end(&cp) - format);
                         *end = '\0'; // change the string in the buffer. Do I even need the end value?
-                        pobj->status = Partial_set_default(pobj, index - 1, start, end);
+                        pobj->status = Partial_set_default(pobj, index - 2, start, end);
                         
                     } else {
-                        pobj->status = Partial_set_default(pobj, index - 1, start, Format_get_default_end(&cp));
+                        pobj->status = Partial_set_default(pobj, index - 2, start, Format_get_default_end(&cp));
                     }
                     if (pobj->status != PARTIAL_SUCCESS) {
                         return pobj->status;
@@ -903,12 +904,15 @@ static partial_status vPartial___nkwargs(Partial * pobj, partial_status (*f_assi
     if (!pobj || !f_assign) {
         return PARTIAL_VALUE_ERROR;
     }
-    unsigned int i = 0, j = 0;
+    unsigned int i = 0, * j = NULL;
     nkwargin = nkwargin > pobj->narg ? pobj->narg : nkwargin;
     while (i < nkwargin && (pobj->status == PARTIAL_SUCCESS)) {
         j = KeywordMap_get(&pobj->map, va_arg(kwargs->args, char *));
-        if (j < pobj->narg) {
-            pobj->status = f_assign(pobj, j, kwargs);
+        if (!j) {
+            return (pobj->status = PARTIAL_KEY_ERROR);
+        }
+        if (*j < pobj->narg) {
+            pobj->status = f_assign(pobj, *j, kwargs);
         } else {
             pobj->status = PARTIAL_KEY_ERROR;
         }
@@ -999,6 +1003,10 @@ static partial_status vPartial_call(Partial * pobj, void * ret, unsigned int nar
         if (pobj->flags & PYTHON_STYLE) {
             pobj->arg_bound = temp_arg_bound;
         }
+    }
+
+    if (pobj->status != PARTIAL_SUCCESS) {
+        return pobj->status;
     }
 
     unsigned int i = 0;
