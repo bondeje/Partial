@@ -322,13 +322,8 @@ static partial_status Partial_set_default(Partial * pobj, unsigned int index, ch
     // copy default into temporary buffer c-string
     // TODO: use memcpy to replace next few lines
     char buffer[PARTIAL_MAX_DEFAULT_SIZE];
-    unsigned int i = 0; // because of check above, i cannot be >= PARTIAL_MAX_DEFAULT_SIZE
-    while (start != end) {
-        buffer[i] = *start;
-        i++;
-        start++;
-    }
-    buffer[i] = '\0';
+    memcpy(buffer, start, end-start);
+    buffer[end-start] = '\0';
 
     // need to handle special case of c-str and void *
     // might be better to use a switch statement
@@ -353,7 +348,7 @@ static partial_status Partial_set_default(Partial * pobj, unsigned int index, ch
     } else {
         // set format code for sscanf
         char format[PARTIAL_FORMAT_BUFFER_SIZE];
-        i = 0;
+        unsigned int i = 0;
         format[i] = '%';
         i++;
         if (pobj->args[index].type->id == PARTIAL_UCHAR) { // special case of unsigned char until i a better use case is defined.
@@ -517,6 +512,9 @@ static size_t Partial_parse_format(Partial * pobj, char * format) {
                         start = (char *)pobj->buffer + (start - format);
                         char * end = (char *)pobj->buffer + (Format_get_default_end(&cp) - format);
                         *end = '\0'; // change the string in the buffer. Do I even need the end value?
+#ifdef DEVELOPMENT
+                        printf("found default string: %s\n", start);
+#endif
                         pobj->status = Partial_set_default(pobj, index - 2, start, end);
                         
                     } else {
@@ -803,6 +801,9 @@ Partial_bind_pair copies the argument into place not matter what AND sets it as 
 
 // index < pobj->narg must be satisfied by caller
 static inline partial_status Partial_fill_pair(Partial * pobj, unsigned int index, VA_LIST * arg) {
+#ifdef DEVELOPMENT
+    printf("in Partial_fill_pair\n");
+#endif
     if (pobj->arg_bound & (1 << index)) {
         pobj->status = PARTIAL_CANNOT_FILL_BOUND_ARG;
     } else {
@@ -863,10 +864,16 @@ static partial_status vPartial___nargs(Partial * pobj, partial_status (*f_assign
     if (!pobj || !f_assign) {
         return PARTIAL_VALUE_ERROR;
     }
+#ifdef DEVELOPMENT
+    printf("in vPartial___nargs\n");
+#endif
     unsigned int i = 0, j = 0;
     nargin = nargin > pobj->narg ? pobj->narg : nargin;
     while (i < nargin && j < pobj->narg && (pobj->status == PARTIAL_SUCCESS)) {
         while (j < pobj->narg && f_assign(pobj, j, args) == PARTIAL_CANNOT_FILL_BOUND_ARG) { // here we want to ignore this "error" as a warning
+#ifdef DEVELOPMENT
+            printf("attempted to fill in over bound argument\n");
+#endif
             j++;
         }
         j++;
@@ -1051,6 +1058,7 @@ partial_status Partial_call(Partial * pobj, void * ret, unsigned int nargin, uns
     }
     VA_LIST args;
     va_start(args.args, nkwargin);
+    //printf("input value: %lld\n", va_arg(args.args, long long));
     pobj->status = vPartial_call(pobj, ret, nargin, nkwargin, &args);
     va_end(args.args);
     return pobj->status;

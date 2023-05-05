@@ -56,8 +56,8 @@ from functools import partial
 def my_func(a, b, c, d):
     # my_func implementation
 
-a = partial(1, c=3)
-#b = a(2,4)             # error in Python because d does not get assigned a value
+a = partial(my_func, 1, c=3)
+#b = a(2,4)             # error in Python because d does not get assigned a value and c given 2x
 c = a(2, d=4)           # my_func(1, 2, 3, 4)
 d = a(2, c=5, d=4)      # my_func(1,2,5,4), repeat of c overwrites original in creation of partial
 
@@ -68,7 +68,7 @@ void my_func(int a, int b, int c, int d)
 Partial * p = Partial_new(-1, FUNC_CAST(my_func), my_func_SIG, 1, 1, 1, "c", 3);
 Partial_call(p, NULL, 2, 0, 2, 4);              // unlike Python, this will call my_func(1, 2, 3, 4);
 Partial_call(p, NULL, 1, 1, 2, "d", 4);         // this is explicitly my_func(1,2,3,4), same as Python
-Partial_call(p, NULL, 1, 1, 2, "d", 4, "c", 5); // this will fail trying to fill in a bound value
+Partial_call(p, NULL, 1, 2, 2, "d", 4, "c", 5); // this will fail trying to fill in a bound value
 Partial_del(p);
 
 ```
@@ -110,6 +110,21 @@ List of accepted types and their format specifiers
 | long double           | %LF       | On systems without long double, defaults to double (due to libffi) |
 | void *                | %p        | Any object pointer. In future, a %s specifier may be <br/> added for char * cstr to allow cstr default values <br/> Only valid default is NULL |
 | cstr (char*)          | %s        | special case for handling char * inputs that need <br/> defaults. If no default is needed, best to use void *. <br/> Note that because of the way buffer/format handling is done<br/>, the cstr default value lifetime is the partial object,<br/> NOT the life of a string literal/string used as format |
+
+### WARNINGS:
+
+Very much not type safe. Due to heavy uses of variadics, the types must match the signature exactly and especially integer input literals should be either cast or defined with appropriate suffixes.
+
+Due to OS and ABI differences, for example, if an untyped signed integer literal is passed into variadics, the following data types will result in UB:
+- long (LINUX, *nix because long is 64-bit on these OSes)
+- long long 
+- size_t
+- int64_t
+- etc.
+
+Additionally, due to calling conventions and passing via registers, on Windows this will be a problem for integers passed as part of variadic in first 4 arguments, but on Linux, this will only really be a problem if the integer is passed as the 7th or larger argument.
+
+Fortunately should not be an issue for char/short since they are promoted to int in variadics anyway.
 
 ### Example
 

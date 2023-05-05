@@ -33,7 +33,7 @@ void all_objects(char c, unsigned char cu, short hd, unsigned short hu, int d, u
 }
 
 void test_all_objects(void) {
-    printf("\ntesting all objects...\n");
+    printf("\ntesting all_objects...\n");
     my_pvoid = (void*)my_string;
     size_t buffer_size = 1024;
     unsigned char buffer[1024] = {'\0'};
@@ -50,7 +50,7 @@ bool bool_func(bool my_bool, bool other_bool) {
 }
 
 void test_bool_func(void) {
-    printf("\ntesting bool func...\n");
+    printf("\ntesting bool_func...\n");
     size_t buffer_size = 1024;
     unsigned char buffer[1024] = {'\0'};
     Partial p;
@@ -69,13 +69,34 @@ void test_bool_func(void) {
     printf("...done\n");
 }
 
+#define short_func_SIG "%hd=%hd{my_short=-2}"
+short short_func(short my_short) {
+    return my_short+1;
+}
+
+void test_short_func(void) {
+    printf("\ntesting short_func...\n");
+    size_t buffer_size = 1024;
+    unsigned char buffer[1024] = {'\0'};
+    Partial p;
+    short result = SHRT_MIN;
+    Partial_init(&p, -1, FUNC_CAST(short_func), short_func_SIG, buffer, buffer_size, 0);
+    Partial_call(&p, &result, 0, 0);
+    printf("short_func: call without args: %hd\n", result);
+    Partial_call(&p, &result, 1, 0, 0);
+    printf("short_func: call with args - 0: %hd\n", result);
+    Partial_call(&p, &result, 0, 1, "my_short", 1);
+    printf("short_func: call with kwargs - my_short = 1: %hd\n", result);
+    printf("...done\n");
+}
+
 #define int_func_SIG "%d=%d{my_int=-2}"
 int int_func(int my_int) {
     return my_int+1;
 }
 
 void test_int_func(void) {
-    printf("\ntesting int func...\n");
+    printf("\ntesting int_func...\n");
     size_t buffer_size = 1024;
     unsigned char buffer[1024] = {'\0'};
     Partial p;
@@ -86,7 +107,133 @@ void test_int_func(void) {
     Partial_call(&p, &result, 1, 0, 0);
     printf("int_func: call with args - 0: %d\n", result);
     Partial_call(&p, &result, 0, 1, "my_int", 1);
-    printf("int_func: call with kwargs - a = 0: %d\n", result);
+    printf("int_func: call with kwargs - my_int = 1: %d\n", result);
+    printf("...done\n");
+}
+
+#define long_func_SIG "%ld=%ld{my_long=-2}"
+long long_func(long my_long) {
+    return my_long+1;
+}
+
+void test_long_func(void) {
+    printf("\ntesting long_func...\n");
+    size_t buffer_size = 1024;
+    unsigned char buffer[1024] = {'\0'};
+    Partial p;
+    long result = LONG_MIN;
+    Partial_init(&p, -1, FUNC_CAST(long_func), long_func_SIG, buffer, buffer_size, 0);
+    Partial_call(&p, &result, 0, 0);
+    printf("long_func: call without args: %ld\n", result);
+    Partial_call(&p, &result, 1, 0, 0);
+    printf("long_func: call with args - 0: %ld\n", result);
+    Partial_call(&p, &result, 0, 1, "my_long", 1);
+    printf("long_func: call with kwargs - my_long = 1: %ld\n", result);
+    printf("...done\n");
+}
+
+#define longlong_func_SIG "%lld=%lld{my_longlong=-2}"
+long long longlong_func(long long my_longlong) {
+    return my_longlong+1;
+}
+
+void test_longlong_func(void) {
+    printf("\ntesting longlong_func...\n");
+    size_t buffer_size = 1024;
+    unsigned char buffer[1024] = {'\0'};
+    Partial p;
+    long long result = LLONG_MIN;
+    Partial_init(&p, -1, FUNC_CAST(longlong_func), longlong_func_SIG, buffer, buffer_size, 0);
+    Partial_call(&p, &result, 0, 0);
+    printf("longlong_func: call without args: %lld\n", result);
+    Partial_call(&p, &result, 1, 0, 0LL);
+    printf("longlong_func: call with args - 0: %lld\n", result);
+    Partial_call(&p, &result, 0, 1, "my_longlong", 1LL);
+    printf("longlong_func: call with kwargs - my_longlong = 1: %lld\n", result);
+    printf("...done\n");
+}
+
+#define size_t_func_SIG "%zu=%zu{my_size_t=0}"
+size_t size_t_func(size_t my_size_t) {
+    return my_size_t+1;
+}
+
+void test_size_t_func(void) {
+    printf("\ntesting size_t_func...\n");
+    size_t buffer_size = 1024;
+    unsigned char buffer[1024] = {'\0'};
+    Partial p;
+    size_t result = SIZE_MAX;
+    Partial_init(&p, -1, FUNC_CAST(size_t_func), size_t_func_SIG, buffer, buffer_size, 0);
+    Partial_call(&p, &result, 0, 0);
+    printf("size_t_func: call without args: %zu\n", result);
+    Partial_call(&p, &result, 1, 0, (size_t)1);
+    printf("size_t_func: call with args - 0: %zu\n", result);
+    Partial_call(&p, &result, 0, 1, "my_size_t", (size_t)2);
+    printf("size_t_func: call with kwargs - my_size_t = 2: %zu\n", result);
+    printf("...done\n");
+}
+
+#define float_func_SIG "%f=%f{my_float=-1e4}"
+float float_func(float my_float) {
+    return my_float*1.1f;
+}
+
+void test_float_func(void) {
+    printf("\ntesting float_func...\n");
+    size_t buffer_size = 1024;
+    unsigned char buffer[1024] = {'\0'};
+    Partial p;
+    float result = FLT_MAX;
+    Partial_init(&p, -1, FUNC_CAST(float_func), float_func_SIG, buffer, buffer_size, 0);
+    Partial_call(&p, &result, 0, 0);
+    printf("float_func: call without args: %f\n", result);
+    Partial_call(&p, &result, 1, 0, 1.2e3);
+    printf("float_func: call with args - 0: %f\n", result);
+    Partial_call(&p, &result, 0, 1, "my_float", 4.8e5);
+    printf("float_func: call with kwargs - my_float = 4.8e5: %f\n", result);
+    printf("...done\n");
+}
+
+#define double_func_SIG "%lf=%lf{my_double=-1e4}"
+double double_func(double my_double) {
+    return my_double*1.1;
+}
+
+void test_double_func(void) {
+    printf("\ntesting double_func...\n");
+    size_t buffer_size = 1024;
+    unsigned char buffer[1024] = {'\0'};
+    Partial p;
+    double result = DBL_MAX;
+    Partial_init(&p, -1, FUNC_CAST(double_func), double_func_SIG, buffer, buffer_size, 0);
+    Partial_call(&p, &result, 0, 0);
+    printf("double_func: call without args: %lf\n", result);
+    Partial_call(&p, &result, 1, 0, 1.2e3);
+    printf("double_func: call with args - 0: %lf\n", result);
+    Partial_call(&p, &result, 0, 1, "my_double", 4.8e5);
+    printf("double_func: call with kwargs - my_double = 4.8e5: %lf\n", result);
+    printf("...done\n");
+}
+
+#define longdouble_func_SIG "%LF=%LF{my_longdouble=-1e4}"
+long double longdouble_func(long double my_longdouble) {
+    return my_longdouble*1.1;
+}
+
+void test_longdouble_func(void) {
+    printf("\ntesting longdouble_func...\n");
+    size_t buffer_size = 1024;
+    unsigned char buffer[1024] = {'\0'};
+    Partial p;
+    long double result = DBL_MAX;
+    Partial_init(&p, -1, FUNC_CAST(longdouble_func), longdouble_func_SIG, buffer, buffer_size, 0);
+    Partial_call(&p, &result, 0, 0);
+    printf("longdouble_func: call without args: %LF\n", result);
+    Partial_call(&p, &result, 1, 0, (long double)1.2e3);
+    printf("longdouble_func: call with args - 0: %LF\n", result);
+    Partial_call(&p, &result, 0, 1, "my_longdouble", (long double)4.8e5);
+    printf("longdouble_func: call with kwargs - my_longdouble = 4.8e5: %LF\n", result);
     printf("...done\n");
 }
 
@@ -96,7 +243,7 @@ char * pvoid_func(char * myp) {
 }
 
 void test_pvoid_func(void) {
-    printf("\ntesting pvoid func...\n");
+    printf("\ntesting pvoid_func...\n");
     size_t buffer_size = 1024;
     unsigned char buffer[1024] = {'\0'};
     Partial p;
@@ -113,11 +260,44 @@ void test_pvoid_func(void) {
     printf("...done\n");
 }
 
+#define cstr_func_SIG "%s=%s{myp=no_result}"
+char * cstr_func(char * myp) {
+    return myp;
+}
+
+void test_cstr_func(void) {
+    printf("\ntesting cstr_func...\n");
+    size_t buffer_size = 1024;
+    unsigned char buffer[1024] = {'\0'};
+    Partial p;
+    char def[20] = "no_result";
+    char kwarg_res[20] = "keyword success";
+    char * result = &def[0];
+    Partial_init(&p, -1, FUNC_CAST(cstr_func), cstr_func_SIG, buffer, buffer_size, 0);
+    Partial_call(&p, &result, 0, 0);
+    printf("cstr_func: call without args: %s\n", result);
+    Partial_call(&p, &result, 1, 0, my_string);
+    printf("cstr_func: call with args - my_string: %s\n", result);
+    Partial_call(&p, &result, 0, 1, "myp", &kwarg_res[0]);
+    printf("cstr_func: call with kwargs - myp = kwarg_res: %s\n", result);
+    printf("...done\n");
+}
+
 int main() {
+    
     test_all_objects();
     test_bool_func();
+    test_short_func();
     test_int_func();
+    test_long_func();
+    test_longlong_func();
+    test_size_t_func();
+    test_float_func();
+    test_double_func();
+    test_longdouble_func();
     test_pvoid_func();
+    test_cstr_func();
+    
     
     return 0;
 }
