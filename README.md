@@ -177,7 +177,7 @@ Default values are optional for all arguments, but for several types, specifical
 | double                | %lf       | |
 | long double           | %LF       | On systems without long double, defaults to double (due to libffi) |
 | void *                | %p        | Any object pointer. Only valid default is `NULL` |
-| cstr (char*)          | %s        | special case for handling char * inputs that need <br/> defaults. If no default is needed, best to use void *. <br/> Note that because of the way buffer/format handling is done<br/>, the cstr default value lifetime is the partial object,<br/> NOT the life of a string literal/string used as format |
+| cstr (char*)          | %s        | special case for handling char * inputs that need <br/> defaults. If no default is needed, best to use void *. <br/> Note that because of the way buffer/format handling is done,<br/> the cstr default value lifetime is the partial object,<br/> NOT the life of a string literal/string used as format |
 | void (*)()            | %vf       | functions without a return. Does not currently accept defaults |
 | void * (*)()          | %pf       | functions returning pointers. Does not currently accept defaults |
 
@@ -225,7 +225,9 @@ Partial_del(o_attr); // clean up
 For setting values after `Partial_new` or `Partial_init` but before `Partial_call`, there are functions of the prototype: `Partial_[action]_n[param type]` where the `[action]` values are "bind" or "fill" and `[param type]` are "pairs", "args", or "kwargs". The semantics of the `[action]` values are such that "bind" will set values defined by parameters and set them as "bound", i.e. they can only be overwritten by another bind, while "fill" will set values only on non-"bound arguments". The `[param type]` values mean:
 
 "kwargs" - the variadic is filled with pairs of (cstr keywords, value) where cstr must be a keyword that was set in the format to a call to `Partial_new` or `Partial_init`.
-"pairs" - the variadic is filled with pairs of (index, value) where index is the <b>input<b/> argument index starting from 0 and value is the value to be filled/bound.
+
+"pairs" - the variadic is filled with pairs of (index, value) where index is the <b>input</b> argument index starting from 0 and value is the value to be filled/bound.
+
 "args" - the variadic is just a list of values, which will be copied based on the semantics of the `[action]`. Note that unlike "kwargs" and "pairs", the argument location is not specified. In the case of `[action]=bind`, the values are filled from left to right starting at input argument index 0. In the case of `[action]=fill`, the values are filled from left to right in non-"bound" arguments.
 
 `Partial_new` follows the semantics of `Partial_bind_*`, i.e. `Partial_new` is effectively like calling `Partial_init` following by `Partial_bind_*` for the positional and keyword arguments, but with the added benefit of memory management on the heap.
