@@ -65,33 +65,31 @@ typedef struct VA_LIST {
 } VA_LIST;
 
 
-typedef void (*voidpfunc)();
-typedef void* (*pvoidpfunc)();
-
 static bool partial_initialized = false;
 
-#define PARTIAL_N_TYPES 20
+#define PARTIAL_N_TYPES 21
 
 #define PARTIAL_VOID         0
 #define PARTIAL_BOOL         1
 #define PARTIAL_CHAR         2
-#define PARTIAL_UCHAR        3
-#define PARTIAL_SHORT        4
-#define PARTIAL_USHORT       5
-#define PARTIAL_INT          6
-#define PARTIAL_UINT         7
-#define PARTIAL_LONG         8
-#define PARTIAL_ULONG        9
-#define PARTIAL_LLONG       10
-#define PARTIAL_ULLONG      11
-#define PARTIAL_SIZE_T      12
-#define PARTIAL_FLOAT       13
-#define PARTIAL_DOUBLE      14
-#define PARTIAL_LDOUBLE     15
-#define PARTIAL_PVOID       16
-#define PARTIAL_VOIDPFUNC   17
-#define PARTIAL_PVOIDPFUNC  18
-#define PARTIAL_CSTRING     19
+#define PARTIAL_SCHAR        3
+#define PARTIAL_UCHAR        4
+#define PARTIAL_SHORT        5
+#define PARTIAL_USHORT       6
+#define PARTIAL_INT          7
+#define PARTIAL_UINT         8
+#define PARTIAL_LONG         9
+#define PARTIAL_ULONG       10
+#define PARTIAL_LLONG       11
+#define PARTIAL_ULLONG      12
+#define PARTIAL_SIZE_T      13
+#define PARTIAL_FLOAT       14
+#define PARTIAL_DOUBLE      15
+#define PARTIAL_LDOUBLE     16
+#define PARTIAL_PVOID       17
+#define PARTIAL_VOIDPFUNC   18
+#define PARTIAL_PVOIDPFUNC  19
+#define PARTIAL_CSTRING     20
 
 PartialType partial_types[PARTIAL_N_TYPES];
 
@@ -110,8 +108,12 @@ static partial_status Partial_global_init() {
                 partial_types[i] = (PartialType) {&ffi_type_schar, sizeof(char), "c", "char", PARTIAL_CHAR};
                 break;
             }
+            case PARTIAL_SCHAR: {
+                partial_types[i] = (PartialType) {&ffi_type_schar, sizeof(signed char), "hhi", "signed char", PARTIAL_SCHAR};
+                break;
+            }
             case PARTIAL_UCHAR: {
-                partial_types[i] = (PartialType) {&ffi_type_uchar, sizeof(unsigned char), "cu", "unsigned char", PARTIAL_UCHAR};
+                partial_types[i] = (PartialType) {&ffi_type_uchar, sizeof(unsigned char), "hhu", "unsigned char", PARTIAL_UCHAR};
                 break;
             }
             case PARTIAL_SHORT: {
@@ -657,12 +659,20 @@ static partial_status Partial_copy_pair(Partial * pobj, unsigned int arg_index, 
             memcpy(pobj->buffer + pobj->args[arg_index].buf_loc, &c, pobj->args[arg_index].type->size);
             break;
         }
-        case PARTIAL_UCHAR: {
-            unsigned char cu = (unsigned char) va_arg(args->args, unsigned int);
+        case PARTIAL_SCHAR: {
+            signed char hhi = (signed char) va_arg(args->args, signed int);
 #ifdef DEVELOPMENT
-            printf("%c, ", cu);
+            printf("%hhi, ", hhi);
 #endif
-            memcpy(pobj->buffer + pobj->args[arg_index].buf_loc, &cu, pobj->args[arg_index].type->size);
+            memcpy(pobj->buffer + pobj->args[arg_index].buf_loc, &hhi, pobj->args[arg_index].type->size);
+            break;
+        }
+        case PARTIAL_UCHAR: {
+            unsigned char hhu = (unsigned char) va_arg(args->args, unsigned int);
+#ifdef DEVELOPMENT
+            printf("%hhu, ", hhu);
+#endif
+            memcpy(pobj->buffer + pobj->args[arg_index].buf_loc, &hhu, pobj->args[arg_index].type->size);
             break;
         }
         case PARTIAL_SHORT: {
@@ -952,6 +962,11 @@ Partial * Partial_new(partial_abi abi, FUNC_PROTOTYPE(func), char * format, unsi
     }
     
     pobj->status = Partial_init(pobj, abi, func, format, NULL, 0, PARTIAL_DEFAULT_FLAGS);
+
+    if (!pobj->status) {
+        free(pobj);
+        return NULL;
+    }
 
     VA_LIST args;
     va_start(args.args, nkwargin);

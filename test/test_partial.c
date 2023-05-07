@@ -8,7 +8,7 @@
 #include <float.h>
 #include "partial.h"
 
-#define all_objects_SIG "%v=%c%cu%hd%hu%d%u%ld%lu%lld%llu%zu%f%lf%LF%p%s"
+#define all_objects_SIG "%v=%c%hhu%hd%hu%d%u%ld%lu%lld%llu%zu%f%lf%LF%p%s"
 char * my_string = "I am the very model of a modern major general";
 void * my_pvoid; // set in main
 void all_objects(char c, unsigned char cu, short hd, unsigned short hu, int d, unsigned int u, long ld, unsigned long lu, long long lld, unsigned long long llu, size_t zu, float flt, double dbl, long double ldbl, void * p, char * s) {
@@ -39,7 +39,7 @@ void test_all_objects(void) {
     unsigned char buffer[1024] = {'\0'};
     Partial p;
     Partial_init(&p, -1, FUNC_CAST(all_objects), all_objects_SIG, buffer, buffer_size, 0);
-    Partial_bind_npairs(&p, 8, 0, CHAR_MIN, 2, SHRT_MIN, 4, INT_MIN, 6, LONG_MIN, 8, LLONG_MIN, 10, SIZE_MAX, 12, DBL_MAX, 14, my_pvoid, PARTIAL_SENTINEL);
+    Partial_bind_npairs(&p, 8, 0, CHAR_MIN, 2, SHRT_MIN, 4, INT_MIN, 6, LONG_MIN, 8, LLONG_MIN, 10, SIZE_MAX, 12, DBL_MAX, 14, my_pvoid);
     Partial_call(&p, NULL, 8, 0, UCHAR_MAX, USHRT_MAX, UINT_MAX, ULONG_MAX, ULLONG_MAX, FLT_MAX, LDBL_MAX, my_string);
     printf("...done\n");
 }
@@ -216,7 +216,7 @@ void test_double_func(void) {
     printf("...done\n");
 }
 
-#define longdouble_func_SIG "%LF=%LF{my_longdouble=-1e4}"
+#define longdouble_func_SIG "%LF=%LF{my_longdouble=-1e4L}"
 long double longdouble_func(long double my_longdouble) {
     return my_longdouble*1.1;
 }
@@ -230,10 +230,10 @@ void test_longdouble_func(void) {
     Partial_init(&p, -1, FUNC_CAST(longdouble_func), longdouble_func_SIG, buffer, buffer_size, 0);
     Partial_call(&p, &result, 0, 0);
     printf("longdouble_func: call without args: %LF\n", result);
-    Partial_call(&p, &result, 1, 0, (long double)1.2e3);
+    Partial_call(&p, &result, 1, 0, 1.2e3L);
     printf("longdouble_func: call with args - 0: %LF\n", result);
-    Partial_call(&p, &result, 0, 1, "my_longdouble", (long double)4.8e5);
-    printf("longdouble_func: call with kwargs - my_longdouble = 4.8e5: %LF\n", result);
+    Partial_call(&p, &result, 0, 1, "my_longdouble", 4.8e5L);
+    printf("longdouble_func: call with kwargs - my_longdouble = 4.8e5L: %LF\n", result);
     printf("...done\n");
 }
 
@@ -283,6 +283,77 @@ void test_cstr_func(void) {
     printf("...done\n");
 }
 
+#define VOIDPFUNC_ARG 1
+
+void my_default_voidpfunc(int a) {
+    printf("in my_default_voidpfunc. Input: %d\n", a);
+}
+
+void my_voidpfunc(int a) {
+    printf("in my_voidpfunc. Input: %d\n", a);
+}
+
+#define voidpfunc_func_SIG "%vf=%vf{my_func}"
+voidpfunc voidpfunc_func(voidpfunc my_func) {
+    return my_func;
+}
+
+void test_voidpfunc_func(void) {
+    printf("\ntesting voidpfunc_func...\n");
+    size_t buffer_size = 1024;
+    unsigned char buffer[1024] = {'\0'};
+    Partial p;
+    voidpfunc result = my_default_voidpfunc;
+    Partial_init(&p, -1, FUNC_CAST(voidpfunc_func), voidpfunc_func_SIG, buffer, buffer_size, 0);
+    //Partial_call(&p, &result, 0, 0);
+    //printf("voidpfunc_func: call without args: %p, result of call(%d): \n\t", (void*)result, VOIDPFUNC_ARG);
+    //result(VOIDPFUNC_ARG);
+    Partial_call(&p, &result, 1, 0, my_voidpfunc);
+    printf("voidpfunc_func: call with args (my_voidpfunc): %p, result of call(%d): \n\t", (void*)result, VOIDPFUNC_ARG);
+    result(VOIDPFUNC_ARG);
+    Partial_call(&p, &result, 0, 1, "my_func", my_voidpfunc);
+    printf("cstr_func: call with kwargs - my_func = my_voidpfunc: %p, result of call(%d): \n\t", (void*)result, VOIDPFUNC_ARG);
+    result(VOIDPFUNC_ARG);
+    printf("...done\n");
+}
+
+
+#define PVOIDPFUNC_ARG my_pvoid
+
+void * my_default_pvoidpfunc(void * a) {
+    printf("in my_default_pvoidpfunc. Input: %p\n", a);
+    return a;
+}
+
+void * my_pvoidpfunc(void * a) {
+    printf("in my_pvoidpfunc. Input: %p\n", a);
+    return a;
+}
+
+#define pvoidpfunc_func_SIG "%pf=%pf{my_pfunc}"
+pvoidpfunc pvoidpfunc_func(pvoidpfunc my_pfunc) {
+    return my_pfunc;
+}
+
+void test_pvoidpfunc_func(void) {
+    printf("\ntesting pvoidpfunc_func...\n");
+    size_t buffer_size = 1024;
+    unsigned char buffer[1024] = {'\0'};
+    Partial p;
+    pvoidpfunc result = my_default_pvoidpfunc;
+    Partial_init(&p, -1, FUNC_CAST(pvoidpfunc_func), pvoidpfunc_func_SIG, buffer, buffer_size, 0);
+    //Partial_call(&p, &result, 0, 0);
+    //printf("voidpfunc_func: call without args: %p, result of call(%p): \n\t", (void*)result, PVOIDPFUNC_ARG);
+    //result(PVOIDPFUNC_ARG);
+    Partial_call(&p, &result, 1, 0, my_pvoidpfunc);
+    printf("voidpfunc_func: call with args (my_pvoidpfunc): %p, result of call(%p): \n\t", (char*)result, PVOIDPFUNC_ARG);
+    result(PVOIDPFUNC_ARG);
+    Partial_call(&p, &result, 0, 1, "my_pfunc", my_pvoidpfunc);
+    printf("cstr_func: call with kwargs - my_pfunc = my_pvoidpfunc: %p, result of call(%p): \n\t", (char*)result, PVOIDPFUNC_ARG);
+    result(PVOIDPFUNC_ARG);
+    printf("...done\n");
+}
+
 int main() {
     
     test_all_objects();
@@ -297,7 +368,8 @@ int main() {
     test_longdouble_func();
     test_pvoid_func();
     test_cstr_func();
-    
+    test_voidpfunc_func();
+    test_pvoidpfunc_func();
     
     return 0;
 }
